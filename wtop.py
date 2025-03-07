@@ -5,8 +5,21 @@ import os
 import sys
 import json
 import pathlib
-import requests
 from math import cos, sin, radians
+
+# Auto-install requests if not available
+try:
+    import requests
+except ImportError:
+    print("Installing required package: requests")
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+        import requests
+    except Exception as e:
+        print(f"Error installing requests: {e}")
+        print("Please manually install the requests package with: pip install requests")
+        sys.exit(1)
 
 # Weather.gov API doesn't require an API key
 UNITS = "imperial"  # imperial for F, metric for C

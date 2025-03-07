@@ -2,8 +2,6 @@
 
 WTOP is a beautiful, feature-rich terminal-based weather dashboard that displays current conditions and forecasts right in your terminal.
 
-![WTOP screenshot](https://i.imgur.com/your-screenshot-here.png)
-
 ## Features
 
 - 🌦️ **Current Conditions**: Temperature, "feels like" temperature, humidity, wind speed and direction
@@ -24,15 +22,12 @@ WTOP is a beautiful, feature-rich terminal-based weather dashboard that displays
    cd wtop
    ```
 
-2. Install dependencies:
-   ```bash
-   pip install requests
-   ```
-
-3. Run WTOP:
+2. Run WTOP:
    ```bash
    python wtop.py
    ```
+
+   *Note: WTOP will automatically install the `requests` package if it's not already installed.*
 
 ## Usage
 
