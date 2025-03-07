@@ -53,18 +53,13 @@ The configuration file is located at `~/.wtop_config.json` and contains:
 - Latitude
 - Longitude
 
-## Mock Mode and API Usage
+## API Usage
 
-WTOP can operate in two modes:
+WTOP uses the Weather.gov API to fetch real-time weather data:
 
-- **Live Mode** (default): Uses the Weather.gov API to fetch real-time weather data
-  - No API key required as Weather.gov is a free public service
-  - Optimized for US locations with accurate data
-  
-- **Mock Mode**: Uses built-in sample data for testing and development
-  - Enable by setting `MOCK_MODE = True` in the script
-  - Great for testing or when internet access is limited
-  - Shows realistic data patterns with temperature variations
+- No API key required as Weather.gov is a free public service
+- Optimized for US locations with accurate data
+- Data is automatically refreshed every 5 seconds
 
 ## Terminal Support
 

@@ -27,8 +27,8 @@ UNITS = "imperial"  # imperial for F, metric for C
 # Config file path
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".wtop_config.json")
 
-# Set to False to use real API data
-MOCK_MODE = False
+# Always use real API data
+MOCK_MODE = False  # This variable is kept for backward compatibility but no longer used
 
 # Load location data from config file or geolocate if not found
 def load_location():
@@ -51,10 +51,6 @@ def load_location():
 
 # Geolocate the user based on their IP address
 def geolocate_user():
-    if MOCK_MODE:
-        # Default location coordinates for San Diego
-        return "San Diego", "CA", 32.7153, -117.1573
-    
     try:
         # Use a free IP geolocation API
         response = requests.get('https://ipinfo.io/json')
@@ -162,86 +158,7 @@ def calculate_sun_times():
 # Get sunrise and sunset times
 SUNRISE_TIME, SUNSET_TIME = calculate_sun_times()
 
-# Sample weather data for testing
-MOCK_WEATHER_DATA = {
-    "coord": {"lon": -117.1573, "lat": 32.7153},
-    "weather": [{"id": 800, "main": "Clear", "description": "clear sky", "icon": "01d"}],
-    "base": "stations",
-    "main": {
-        "temp": 72.5,
-        "feels_like": 71.8,
-        "temp_min": 65.3,
-        "temp_max": 77.2,
-        "pressure": 1012,
-        "humidity": 60
-    },
-    "visibility": 10000,
-    "wind": {"speed": 8.5, "deg": 270},
-    "clouds": {"all": 5},
-    "dt": 1614978000,
-    "sys": {
-        "type": 1,
-        "id": 5545,
-        "country": "US",
-        "sunrise": SUNRISE_TIME,
-        "sunset": SUNSET_TIME
-    },
-    "timezone": -28800,
-    "id": 5391811,
-    "name": "San Diego",
-    "cod": 200
-}
-
-# Sample forecast data for testing
-MOCK_FORECAST_DATA = {
-    "list": [
-        {
-            "dt_txt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "main": {"temp": 72.5, "humidity": 60},
-            "weather": [{"description": "clear sky"}],
-            "clouds": {"all": 5},
-            "wind": {"speed": 8.5, "deg": 270}
-        }
-    ] * 8  # Replicate the forecast entry 8 times
-}
-
-# Create varied forecasts for more realistic data
-MOCK_FORECAST_DATA["list"] = []
-temps = [68, 70, 71, 72, 73, 74, 75, 74, 73, 72, 71, 69]  # Temperatures by hour for 12 hours
-weather_conditions = [
-    {"description": "clear sky", "icon": "01d"},
-    {"description": "few clouds", "icon": "02d"},
-    {"description": "scattered clouds", "icon": "03d"},
-    {"description": "partly cloudy", "icon": "04d"}
-]
-
-# Create hourly forecasts with varied data for the next 12 hours
-for i in range(12):
-    hours_ahead = i  # One forecast per hour
-    # Get current time for each refresh
-    current_datetime = datetime.datetime.now()
-    new_time = current_datetime + datetime.timedelta(hours=hours_ahead)
-    temp = temps[i]
-    weather_idx = min(3, i % 4)
-    
-    # Create more variation in the forecast
-    forecast = {
-        "dt_txt": new_time.strftime("%Y-%m-%d %H:%M:%S"),
-        "main": {
-            "temp": temp,
-            "feels_like": temp - 1.5,
-            "humidity": 60 + (i * 2 if i < 6 else (12 - i) * 2)
-        },
-        "weather": [weather_conditions[weather_idx]],
-        "clouds": {"all": 5 + (i * 7) % 30},
-        "wind": {"speed": 7 + (i % 3), "deg": (i * 30) % 360},
-    }
-    
-    # Add precipitation for some forecasts
-    if i in [3, 7, 10]:
-        forecast["rain"] = {"1h": 0.2 * (i % 3 + 1)}
-    
-    MOCK_FORECAST_DATA["list"].append(forecast)
+# No sample data - always use real API data
 
 # Terminal color codes
 class Colors:
@@ -622,15 +539,12 @@ def draw_forecast_line(left_content="", right_content=""):
 
 
 def get_weather_data():
-    if MOCK_MODE:
-        return MOCK_WEATHER_DATA
-    else:
-        try:
-            # Weather.gov API requires lat/lon coordinates to get the forecast grid
-            headers = {
-                "User-Agent": "wtop/1.0 (tony.test@example.com)",
-                "Accept": "application/json"
-            }
+    try:
+        # Weather.gov API requires lat/lon coordinates to get the forecast grid
+        headers = {
+            "User-Agent": "wtop/1.0 (github.com/Zazarothh/wtop)",
+            "Accept": "application/json"
+        }
             
             # First, get the forecast office and grid coordinates using lat/lon
             url = f"https://api.weather.gov/points/{LATITUDE},{LONGITUDE}"
@@ -709,15 +623,12 @@ def get_weather_data():
 
 
 def get_forecast_data():
-    if MOCK_MODE:
-        return MOCK_FORECAST_DATA
-    else:
-        try:
-            # Weather.gov API requires lat/lon coordinates to get the forecast grid
-            headers = {
-                "User-Agent": "wtop/1.0 (tony.test@example.com)",
-                "Accept": "application/json"
-            }
+    try:
+        # Weather.gov API requires lat/lon coordinates to get the forecast grid
+        headers = {
+            "User-Agent": "wtop/1.0 (github.com/Zazarothh/wtop)",
+            "Accept": "application/json"
+        }
             
             # First, get the forecast office and grid coordinates using lat/lon
             url = f"https://api.weather.gov/points/{LATITUDE},{LONGITUDE}"
@@ -1810,11 +1721,9 @@ def main():
         print(f"Location coordinates: {LATITUDE}, {LONGITUDE}")
         print("Your location is automatically detected using IP geolocation and saved for future use.")
         print("Location data is stored in: " + CONFIG_FILE)
-        print("\nFor real weather data (currently using mock data):")
-        print("1. Get an API key from https://openweathermap.org/")
-        print("2. Update the API_KEY in the script")
-        print("3. Set MOCK_MODE = False in the script")
-        print("\nThe dashboard updates automatically every 60 seconds.")
+        print("\nThe dashboard uses the Weather.gov API for real-time weather data.")
+        print("No API key is required for US locations.")
+        print("\nThe dashboard updates automatically every 5 seconds.")
         print("Press Ctrl+C to exit.")
         
         if "--check-borders" in sys.argv:
