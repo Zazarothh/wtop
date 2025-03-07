@@ -1301,13 +1301,10 @@ def display_wtop():
     
     # Static box dimensions for consistency
     box_width = Box.DEFAULT_WIDTH
-    left_width = hourly_width
-    right_width = daily_width
+    left_width = 86  # Fixed width for hourly column
+    right_width = 43  # Fixed width for daily column
     
-    # Static borders for forecast table
-    FORECAST_TOP_BORDER = "┌────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┐"
-    FORECAST_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┤"
-    FORECAST_BOTTOM_BORDER = "└────────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────┘"
+    # These are redundant - remove them since we're using Box constants
     
     # Make these global in the function scope for other calculations
     global left_column_width, right_column_width
@@ -1693,17 +1690,11 @@ def main():
         print("Press Ctrl+C to exit.")
         sys.exit(0)
     
-    # Run in a continuous loop, updating every 60 seconds
+    # Run in a continuous loop, updating every 5 seconds
     try:
         while True:
             # Display the dashboard
             display_wtop()
-            
-            # Show exit instructions at the bottom with proper box formatting
-            try:
-                terminal_width = os.get_terminal_size().columns
-            except (AttributeError, OSError):
-                terminal_width = 100
             
             # Create a simple status message
             exit_msg = "Press Ctrl+C to exit"
