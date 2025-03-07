@@ -284,7 +284,8 @@ class Box:
     
     # ===== FORECAST TABLE BORDERS =====
     # Manually set each border with the split at exactly the right position
-    FORECAST_TOP = "┌─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┐"
+    # Each border is exactly 130 characters wide with perfect alignment
+    FORECAST_TOP    = "┌─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┐"
     FORECAST_BOTTOM = "└─────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────┘"
     FORECAST_DIVIDER = "├─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┤"
     
@@ -1387,7 +1388,14 @@ def display_wtop():
     
     # Draw fixed section headers
     left_header = f"{Colors.BOLD}Hourly Forecast (Next 12 Hours){Colors.RESET}"
-    right_header = f"{Colors.BOLD}7-Day Forecast{Colors.RESET}"
+    
+    # Get the margin from Box class, or use default if not yet calculated
+    daily_margin = getattr(Box, 'daily_table_margin', 8)  # Default margin if not set yet
+    
+    # Create right header with exact same margin as the daily forecast table
+    # This ensures the header is centered with the content below it
+    right_header_text = f"{Colors.BOLD}7-Day Forecast{Colors.RESET}"
+    right_header = ' ' * daily_margin + right_header_text
     
     # Use the draw_forecast_line function for perfect column alignment
     print(draw_forecast_line(left_header, right_header))
@@ -1640,8 +1648,13 @@ def display_wtop():
     table_content_width = day_width + icon_width + temp_width + cond_width + rain_width + 4  # +4 for the separator characters
     
     # Center the table in the available space
+    # Center the table in the available space - use the same margin for all rows
     daily_margin = (right_column_width - table_content_width) // 2
     daily_margin = max(2, daily_margin)  # Ensure at least 2 spaces of margin
+    
+    # Store this margin as a class attribute so it can be used by the header
+    # This is used for the "7-Day Forecast" header centering
+    Box.daily_table_margin = daily_margin
     
     # Format string with centered columns
     daily_formats = f"{' ' * daily_margin}{{:^{day_width}}}│{{:^{icon_width}}}│{{:^{temp_width}}}│{{:^{cond_width}}}│{{:^{rain_width}}}"
