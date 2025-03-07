@@ -31,7 +31,7 @@ WTOP is a beautiful, feature-rich terminal-based weather dashboard that displays
 
 3. Run WTOP:
    ```bash
-   python wtop_v1.0.py
+   python wtop.py
    ```
 
 ## Usage
