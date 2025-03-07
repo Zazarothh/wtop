@@ -13,6 +13,7 @@ WTOP is a beautiful, feature-rich terminal-based weather dashboard that displays
 - 🔄 **Live Updates**: Refreshes automatically every 5 seconds
 - 🎯 **No API Key Required**: Uses the free Weather.gov API (US locations)
 - 🎨 **Beautiful Display**: Rich color coding and Unicode symbols for better visualization
+- 📦 **Auto-Dependency Installation**: Automatically installs required dependencies
 
 ## Installation
 
@@ -27,7 +28,13 @@ WTOP is a beautiful, feature-rich terminal-based weather dashboard that displays
    python wtop.py
    ```
 
-   *Note: WTOP will automatically install the `requests` package if it's not already installed.*
+### Dependencies
+
+WTOP has minimal dependencies and will automatically install what it needs:
+
+- **requests**: For API communication - automatically installed if missing
+  
+The auto-installation uses pip and requires Python's standard library. No manual installation of packages is required.
 
 ## Usage
 
@@ -35,7 +42,8 @@ WTOP will automatically detect your location based on your IP address and displa
 
 ### Command Line Options
 
-- `-h` or `--help`: Display help information
+- `-h` or `--help`: Display help information and usage
+- `--check-borders`: Validate border alignment (for development/debugging)
 
 ### Configuration
 
@@ -45,16 +53,41 @@ The configuration file is located at `~/.wtop_config.json` and contains:
 - Latitude
 - Longitude
 
-## Mock Mode
+## Mock Mode and API Usage
 
-By default, WTOP uses the Weather.gov API to fetch real weather data. For testing or development, you can enable mock mode by setting `MOCK_MODE = True` in the script.
+WTOP can operate in two modes:
+
+- **Live Mode** (default): Uses the Weather.gov API to fetch real-time weather data
+  - No API key required as Weather.gov is a free public service
+  - Optimized for US locations with accurate data
+  
+- **Mock Mode**: Uses built-in sample data for testing and development
+  - Enable by setting `MOCK_MODE = True` in the script
+  - Great for testing or when internet access is limited
+  - Shows realistic data patterns with temperature variations
 
 ## Terminal Support
 
-WTOP uses Unicode box-drawing characters and ANSI color codes. For best results, use a terminal that supports these features, such as:
-- iTerm2 (macOS)
-- Windows Terminal (Windows)
-- GNOME Terminal, Konsole, or Terminator (Linux)
+WTOP uses Unicode box-drawing characters and ANSI color codes for its beautiful display. For best results, use a modern terminal that supports these features:
+
+- **Windows**: 
+  - Windows Terminal (recommended)
+  - PowerShell with modern font
+  
+- **macOS**:
+  - iTerm2 (recommended)
+  - Terminal.app
+  
+- **Linux**:
+  - GNOME Terminal
+  - Konsole
+  - Terminator
+  - Alacritty
+
+For optimal display, ensure your terminal:
+- Uses a monospace font that includes Unicode box-drawing characters
+- Has ANSI color support enabled
+- Is set to a width of at least 130 characters
 
 ## License
 
@@ -62,5 +95,13 @@ MIT
 
 ## Acknowledgments
 
-- Weather data provided by [Weather.gov](https://www.weather.gov/)
-- Location data provided by [ipinfo.io](https://ipinfo.io/)
+- **Data Sources**:
+  - Weather data provided by [Weather.gov](https://www.weather.gov/)
+  - Location data provided by [ipinfo.io](https://ipinfo.io/)
+  
+- **Libraries**:
+  - [requests](https://requests.readthedocs.io/) - For API communication
+  
+- **Inspiration**:
+  - Terminal-based applications like `htop` and `wttr.in`
+  - Modern CLI design patterns and Unicode art
