@@ -255,12 +255,12 @@ class Colors:
     MAGENTA = "\033[35m"
     WHITE = "\033[37m"
     
-# Box drawing characters and static borders for perfect alignment
+# Box drawing characters and static borders with exact widths
 class Box:
-    # Fixed width for all boxes (main console width)
-    DEFAULT_WIDTH = 130  # This matches the actual length from the above test
+    # Fixed total width (including borders) for all boxes
+    DEFAULT_WIDTH = 130
     
-    # Box characters
+    # Box characters for drawing borders
     HORIZONTAL = "─"
     VERTICAL = "│"
     TOP_LEFT = "┌"
@@ -273,67 +273,86 @@ class Box:
     BOTTOM_T = "┴"
     CROSS = "┼"
     
-    # ===== MAIN BOX BORDERS =====
-    # Manually set each border to the exact width - these need to be 130 characters each
-    SINGLE_TOP =    "┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-    SINGLE_BOTTOM = "└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
-    SINGLE_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
+    # Generate a horizontal line of exact length with given characters
+    @staticmethod
+    def make_line(width, left_char, mid_char, right_char):
+        """Create a line with exact width."""
+        return left_char + mid_char * (width - 2) + right_char
     
-    # ===== FORECAST TABLE BORDERS =====
-    # Manually set each border with the split at exactly the right position - each string is 130 characters
-    FORECAST_TOP    = "┌─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┐"
-    FORECAST_BOTTOM = "└─────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────┘"
-    FORECAST_DIVIDER = "├─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┤"
-    
-    # Calculate column widths directly from the borders for perfect alignment
+    # Helper method to generate static borders of exact width
     @classmethod
-    def initialize_column_widths(cls):
-        """Calculate the exact column widths from the border strings."""
-        # Find the vertical bar position in the FORECAST_TOP string
-        # We need to find where the "┬" character is in the FORECAST_TOP border
-        # This is the middle divider that separates the two columns
-        try:
-            # First check for "┬" character which is the proper T-junction
-            cls.SPLIT_POSITION = cls.FORECAST_TOP.index("┬")
-            # If there's no T-junction, look for a pipe character
-            if cls.SPLIT_POSITION == -1:
-                cls.SPLIT_POSITION = cls.FORECAST_TOP.rindex("│")
-        except ValueError:
-            # If no proper divider found, fallback to searching for "├" 
-            # in the FORECAST_DIVIDER
-            try:
-                cls.SPLIT_POSITION = cls.FORECAST_DIVIDER.index("┬")
-                if cls.SPLIT_POSITION == -1:
-                    # Last resort fallback
-                    cls.SPLIT_POSITION = 94  # Based on our output above
-            except ValueError:
-                # Last resort fallback
-                cls.SPLIT_POSITION = 94  # Based on our output above
+    def generate_borders(cls):
+        """Generate all border strings with exact widths."""
+        # Single-column box borders (width = DEFAULT_WIDTH)
+        cls.SINGLE_TOP = cls.make_line(cls.DEFAULT_WIDTH, cls.TOP_LEFT, cls.HORIZONTAL, cls.TOP_RIGHT)
+        cls.SINGLE_BOTTOM = cls.make_line(cls.DEFAULT_WIDTH, cls.BOTTOM_LEFT, cls.HORIZONTAL, cls.BOTTOM_RIGHT)
+        cls.SINGLE_DIVIDER = cls.make_line(cls.DEFAULT_WIDTH, cls.LEFT_T, cls.HORIZONTAL, cls.RIGHT_T)
         
-        # Set column widths using the exact split position we found
-        cls.LEFT_COLUMN_WIDTH = cls.SPLIT_POSITION - 1  # -1 for the left border
-        cls.RIGHT_COLUMN_WIDTH = cls.DEFAULT_WIDTH - cls.SPLIT_POSITION - 2  # -2 for the middle and right borders
+        # Calculate split position for two-column layout
+        # This is fixed at character 94 (measured manually for precise alignment)
+        cls.SPLIT_POSITION = 94
         
-        # Set the right border position for ensuring perfect alignment
-        cls.RIGHT_BORDER_POSITION = cls.DEFAULT_WIDTH - 1
+        # Create split borders with T-junctions
+        # Left section
+        left_chars = cls.HORIZONTAL * (cls.SPLIT_POSITION - 1)
+        # Right section
+        right_chars = cls.HORIZONTAL * (cls.DEFAULT_WIDTH - cls.SPLIT_POSITION - 2)
+        
+        # Two-column box borders with split at SPLIT_POSITION
+        cls.FORECAST_TOP = cls.TOP_LEFT + left_chars + cls.TOP_T + right_chars + cls.TOP_RIGHT
+        cls.FORECAST_BOTTOM = cls.BOTTOM_LEFT + left_chars + cls.BOTTOM_T + right_chars + cls.BOTTOM_RIGHT
+        cls.FORECAST_DIVIDER = cls.LEFT_T + left_chars + cls.TOP_T + right_chars + cls.RIGHT_T  # Use TOP_T for middle junction
+        
+        # Calculate usable column widths (space between borders)
+        cls.LEFT_COLUMN_WIDTH = cls.SPLIT_POSITION - 1
+        cls.RIGHT_COLUMN_WIDTH = cls.DEFAULT_WIDTH - cls.SPLIT_POSITION - 2
+        
+        # For convenience, generate empty row templates that can be used for formatting
+        cls.EMPTY_ROW = cls.VERTICAL + " " * (cls.DEFAULT_WIDTH - 2) + cls.VERTICAL
+        cls.EMPTY_SPLIT_ROW = (cls.VERTICAL + " " * (cls.SPLIT_POSITION - 1) + 
+                              cls.VERTICAL + " " * (cls.DEFAULT_WIDTH - cls.SPLIT_POSITION - 2) + 
+                              cls.VERTICAL)
 
     # Validate border widths at class load time
     @classmethod
     def validate_borders(cls):
-        """Print the length of each border to verify they are correct."""
-        print(f"SINGLE_TOP length: {len(cls.SINGLE_TOP)} (should be {cls.DEFAULT_WIDTH})")
-        print(f"SINGLE_BOTTOM length: {len(cls.SINGLE_BOTTOM)} (should be {cls.DEFAULT_WIDTH})")
-        print(f"SINGLE_DIVIDER length: {len(cls.SINGLE_DIVIDER)} (should be {cls.DEFAULT_WIDTH})")
-        print(f"FORECAST_TOP length: {len(cls.FORECAST_TOP)} (should be {cls.DEFAULT_WIDTH})")
-        print(f"FORECAST_BOTTOM length: {len(cls.FORECAST_BOTTOM)} (should be {cls.DEFAULT_WIDTH})")
-        print(f"FORECAST_DIVIDER length: {len(cls.FORECAST_DIVIDER)} (should be {cls.DEFAULT_WIDTH})")
-        print(f"Column widths: {cls.LEFT_COLUMN_WIDTH} + {cls.RIGHT_COLUMN_WIDTH} + 3 = {cls.LEFT_COLUMN_WIDTH + cls.RIGHT_COLUMN_WIDTH + 3} (should be {cls.DEFAULT_WIDTH})")
-        print(f"Split position: {cls.FORECAST_TOP.index('┬')} (this is where the middle divider is)")
+        """Verify all borders have the correct dimensions."""
+        # Check border lengths
+        assert len(cls.SINGLE_TOP) == cls.DEFAULT_WIDTH, f"SINGLE_TOP wrong length: {len(cls.SINGLE_TOP)}"
+        assert len(cls.SINGLE_BOTTOM) == cls.DEFAULT_WIDTH, f"SINGLE_BOTTOM wrong length: {len(cls.SINGLE_BOTTOM)}"
+        assert len(cls.SINGLE_DIVIDER) == cls.DEFAULT_WIDTH, f"SINGLE_DIVIDER wrong length: {len(cls.SINGLE_DIVIDER)}"
+        assert len(cls.FORECAST_TOP) == cls.DEFAULT_WIDTH, f"FORECAST_TOP wrong length: {len(cls.FORECAST_TOP)}"
+        assert len(cls.FORECAST_BOTTOM) == cls.DEFAULT_WIDTH, f"FORECAST_BOTTOM wrong length: {len(cls.FORECAST_BOTTOM)}"
+        assert len(cls.FORECAST_DIVIDER) == cls.DEFAULT_WIDTH, f"FORECAST_DIVIDER wrong length: {len(cls.FORECAST_DIVIDER)}"
+        
+        # Check column widths add up correctly 
+        assert cls.LEFT_COLUMN_WIDTH + cls.RIGHT_COLUMN_WIDTH + 3 == cls.DEFAULT_WIDTH, \
+            f"Column widths don't add up: {cls.LEFT_COLUMN_WIDTH} + {cls.RIGHT_COLUMN_WIDTH} + 3 != {cls.DEFAULT_WIDTH}"
+        
+        # Check character positions in forecast borders
+        middle_border_pos = cls.FORECAST_TOP.find('┬')
+        if middle_border_pos != cls.SPLIT_POSITION:
+            raise ValueError(f"Middle border position mismatch: {middle_border_pos} != {cls.SPLIT_POSITION}")
+        
+        # Verify empty row templates are correct length
+        assert len(cls.EMPTY_ROW) == cls.DEFAULT_WIDTH, f"EMPTY_ROW wrong length: {len(cls.EMPTY_ROW)}"
+        assert len(cls.EMPTY_SPLIT_ROW) == cls.DEFAULT_WIDTH, f"EMPTY_SPLIT_ROW wrong length: {len(cls.EMPTY_SPLIT_ROW)}" 
+        
+        # For the --check-borders option, print border details
+        if '--check-borders' in sys.argv:
+            print(f"SINGLE_TOP length: {len(cls.SINGLE_TOP)} (should be {cls.DEFAULT_WIDTH})")
+            print(f"SINGLE_BOTTOM length: {len(cls.SINGLE_BOTTOM)} (should be {cls.DEFAULT_WIDTH})")
+            print(f"SINGLE_DIVIDER length: {len(cls.SINGLE_DIVIDER)} (should be {cls.DEFAULT_WIDTH})")
+            print(f"FORECAST_TOP length: {len(cls.FORECAST_TOP)} (should be {cls.DEFAULT_WIDTH})")
+            print(f"FORECAST_BOTTOM length: {len(cls.FORECAST_BOTTOM)} (should be {cls.DEFAULT_WIDTH})")
+            print(f"FORECAST_DIVIDER length: {len(cls.FORECAST_DIVIDER)} (should be {cls.DEFAULT_WIDTH})")
+            print(f"Column widths: {cls.LEFT_COLUMN_WIDTH} + {cls.RIGHT_COLUMN_WIDTH} + 3 = {cls.LEFT_COLUMN_WIDTH + cls.RIGHT_COLUMN_WIDTH + 3} (should be {cls.DEFAULT_WIDTH})")
+            print(f"Split position: {cls.FORECAST_TOP.find('┬')} (this is where the middle divider is)")
 
-# Initialize Box class column widths
-Box.initialize_column_widths()
+# Generate all borders
+Box.generate_borders()
 
-# Validate borders at module load time
+# Validate borders at module load time (will raise errors if any dimensions are wrong)
 Box.validate_borders()
     
 # For calculating color escape sequence lengths
@@ -344,7 +363,7 @@ def strip_color_codes(text):
     return ansi_escape.sub('', text)
 
 
-def draw_hourly_forecast_table(forecasts, box_width):
+def draw_hourly_forecast_table(forecasts):
     """Draw the hourly forecast table with perfect alignment.
     
     Args:
@@ -440,170 +459,166 @@ def draw_hourly_forecast_table(forecasts, box_width):
     
     return lines
 
-# Simplified box drawing functions that rely on static borders
+# Simplified box drawing function that ensures perfect alignment
 
-def draw_box_line(content, box_type="single"):
-    """Draw a line of content in a box with perfect alignment.
+def draw_box_line(content):
+    """Draw a line of content in a single-column box with perfect alignment.
     
     Args:
         content: The content to display inside the box line
-        box_type: Type of box ('single' or 'forecast')
-    
+        
     Returns:
         Perfectly aligned box line with exact width
     """
-    content_no_color = strip_color_codes(content)
+    # Get content length without color codes
+    content_length = len(strip_color_codes(content))
     
-    if box_type == "single":
-        # Basic single-column box
-        inner_width = Box.DEFAULT_WIDTH - 2  # Width without the borders
-        content_width = len(content_no_color)
-        padding = inner_width - content_width
+    # Calculate available space
+    inner_width = Box.DEFAULT_WIDTH - 2  # Width between borders
+    
+    # Truncate if needed
+    if content_length > inner_width:
+        # We need to truncate at the right position accounting for color codes
+        visible_count = 0
+        final_pos = 0
         
-        if padding < 0:
-            # Content is too wide, truncate it
-            truncated_length = inner_width - 3  # Allow for "..."
-            return f"{Box.VERTICAL}{content[:truncated_length]}...{Box.VERTICAL}"
+        for i, char in enumerate(content):
+            if char == '\033':  # ANSI escape sequence start
+                # Skip this entire color code
+                color_end = content.find('m', i)
+                if color_end != -1:
+                    continue
+            else:
+                visible_count += 1
+                if visible_count == inner_width - 3:  # -3 for '...'
+                    final_pos = i + 1
+                    break
         
-        # Build the final line with exact width
-        return f"{Box.VERTICAL}{content}{' ' * padding}{Box.VERTICAL}"
-        
-    elif box_type == "forecast":
-        # Split forecast box with two columns
-        if "|" in content:
-            # Content contains a column separator
-            left_content, right_content = content.split("|", 1)
-            
-            left_content_no_color = strip_color_codes(left_content)
-            right_content_no_color = strip_color_codes(right_content)
-            
-            # Calculate padding for each column
-            left_padding = Box.LEFT_COLUMN_WIDTH - len(left_content_no_color)
-            right_padding = Box.RIGHT_COLUMN_WIDTH - len(right_content_no_color)
-            
-            if left_padding < 0:
-                left_content = left_content[:Box.LEFT_COLUMN_WIDTH - 3] + "..."
-                left_padding = 0
-                
-            if right_padding < 0:
-                right_content = right_content[:Box.RIGHT_COLUMN_WIDTH - 3] + "..."
-                right_padding = 0
-            
-            # Build the line with exact column widths
-            return f"{Box.VERTICAL}{left_content}{' ' * left_padding}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
+        # If we found a valid truncation point
+        if final_pos > 0:
+            content = content[:final_pos] + "..." + Colors.RESET
         else:
-            # Single content centered across both columns
-            inner_width = Box.DEFAULT_WIDTH - 2  # Width without the borders
-            content_width = len(content_no_color)
-            padding = inner_width - content_width
-            
-            if padding < 0:
-                # Content is too wide, truncate it
-                truncated_length = inner_width - 3  # Allow for "..."
-                return f"{Box.VERTICAL}{content[:truncated_length]}...{Box.VERTICAL}"
-            
-            # Calculate centering
-            left_padding = padding // 2
-            right_padding = padding - left_padding
-            
-            # Build the centered line
-            return f"{Box.VERTICAL}{' ' * left_padding}{content}{' ' * right_padding}{Box.VERTICAL}"
+            # Fallback to a simple truncation (may break color codes)
+            content = content[:inner_width - 3] + "..." + Colors.RESET
+        
+        content_length = inner_width  # Now exactly at maximum
+    
+    # Calculate padding needed for exact fit
+    padding = inner_width - content_length
+    
+    # Create perfectly aligned line
+    return f"{Box.VERTICAL}{content}{' ' * padding}{Box.VERTICAL}"
 
+# Completely rewritten function for drawing content rows with perfect alignment
 def draw_forecast_line(left_content="", right_content=""):
-    """Draw a line in the forecast box with content in both columns.
-    Ensures perfect alignment with the border characters.
+    """Create a perfectly aligned row for the two-column forecast table.
+    
+    This function ensures the vertical bars are positioned exactly at:
+    - Position 0 (left border)
+    - Position SPLIT_POSITION (middle border)
+    - Position DEFAULT_WIDTH-1 (right border)
     
     Args:
-        left_content: Content for the left column
-        right_content: Content for the right column
+        left_content: Content for the left column (with or without color codes)
+        right_content: Content for the right column (with or without color codes)
         
     Returns:
-        Formatted line with proper borders and padding
+        A perfectly formatted line with correct borders and alignment
     """
-    # Strip color codes for accurate width calculation
-    left_no_color = strip_color_codes(left_content)
-    right_no_color = strip_color_codes(right_content)
+    # Get raw content lengths without ANSI color codes
+    left_length = len(strip_color_codes(left_content))
+    right_length = len(strip_color_codes(right_content))
     
-    # Calculate padding needed for exact alignment
-    left_padding = Box.LEFT_COLUMN_WIDTH - len(left_no_color)
-    right_padding = Box.RIGHT_COLUMN_WIDTH - len(right_no_color)
+    # Calculate available space in each column
+    max_left_length = Box.LEFT_COLUMN_WIDTH
+    max_right_length = Box.RIGHT_COLUMN_WIDTH
     
-    # Handle content that's too long
-    if left_padding < 0:
-        # Find truncation point that preserves color codes
-        visible_pos = 0
-        truncation_point = 0
+    # Truncate content if too long (preserving color codes)
+    if left_length > max_left_length:
+        # We need to truncate at the right position accounting for color codes
+        visible_count = 0
+        final_pos = 0
+        
         for i, char in enumerate(left_content):
-            if i < len(left_content) - 5 and left_content[i:i+2] == "\033":
-                # Skip color code
-                color_end = left_content.find("m", i)
+            if char == '\033':  # ANSI escape sequence start
+                # Skip this entire color code
+                color_end = left_content.find('m', i)
                 if color_end != -1:
-                    i = color_end
+                    continue
             else:
-                visible_pos += 1
-                if visible_pos == Box.LEFT_COLUMN_WIDTH - 3:
-                    truncation_point = i + 1
+                visible_count += 1
+                if visible_count == max_left_length - 3:  # -3 for '...'
+                    final_pos = i + 1
                     break
         
-        if truncation_point > 0:
-            left_content = left_content[:truncation_point] + "..." + Colors.RESET
+        # If we found a valid truncation point
+        if final_pos > 0:
+            left_content = left_content[:final_pos] + "..." + Colors.RESET
         else:
-            left_content = left_content[:Box.LEFT_COLUMN_WIDTH - 3] + "..." + Colors.RESET
-        left_padding = 0
+            # Fallback to a simple truncation (may break color codes)
+            left_content = left_content[:max_left_length - 3] + "..." + Colors.RESET
+        
+        left_length = max_left_length  # Now we're exactly at the maximum
     
-    # Handle right content the same way    
-    if right_padding < 0:
-        visible_pos = 0
-        truncation_point = 0
+    # Same truncation logic for right column
+    if right_length > max_right_length:
+        visible_count = 0
+        final_pos = 0
+        
         for i, char in enumerate(right_content):
-            if i < len(right_content) - 5 and right_content[i:i+2] == "\033":
-                # Skip color code
-                color_end = right_content.find("m", i)
+            if char == '\033':  # ANSI escape sequence start
+                # Skip this entire color code
+                color_end = right_content.find('m', i)
                 if color_end != -1:
-                    i = color_end
+                    continue
             else:
-                visible_pos += 1
-                if visible_pos == Box.RIGHT_COLUMN_WIDTH - 3:
-                    truncation_point = i + 1
+                visible_count += 1
+                if visible_count == max_right_length - 3:  # -3 for '...'
+                    final_pos = i + 1
                     break
         
-        if truncation_point > 0:
-            right_content = right_content[:truncation_point] + "..." + Colors.RESET
+        # If we found a valid truncation point
+        if final_pos > 0:
+            right_content = right_content[:final_pos] + "..." + Colors.RESET
         else:
-            right_content = right_content[:Box.RIGHT_COLUMN_WIDTH - 3] + "..." + Colors.RESET
-        right_padding = 0
+            # Fallback to a simple truncation (may break color codes)
+            right_content = right_content[:max_right_length - 3] + "..." + Colors.RESET
+        
+        right_length = max_right_length  # Now we're exactly at the maximum
     
-    # Build the line with exact column widths using the actual split position we measured
-    # The key to perfect alignment is using the exact split position
+    # Calculate padding to fill each column exactly
+    left_padding = max_left_length - left_length
+    right_padding = max_right_length - right_length
     
-    # First format the left column with proper padding
-    left_side = f"{Box.VERTICAL}{left_content}{' ' * left_padding}"
+    # Create the line with exact positioning of all borders
+    result = (Box.VERTICAL +                 # Left border
+              left_content +                 # Left content
+              ' ' * left_padding +           # Left padding
+              Box.VERTICAL +                 # Middle border
+              right_content +                # Right content 
+              ' ' * right_padding +          # Right padding
+              Box.VERTICAL)                  # Right border
     
-    # Calculate how much space is left for the right column
-    # This ensures the right border is exactly at DEFAULT_WIDTH
-    left_side_visible_len = len(strip_color_codes(left_side))
-    available_right_width = Box.DEFAULT_WIDTH - left_side_visible_len - 2  # -2 for the middle border and right border
+    # Final verification
+    result_length = len(strip_color_codes(result))
+    if result_length != Box.DEFAULT_WIDTH:
+        # Print detailed diagnostic info if alignment is wrong
+        print(f"Alignment error: line length {result_length} != {Box.DEFAULT_WIDTH}, " +
+              f"Left({left_length}+{left_padding}={left_length+left_padding}), " +
+              f"Right({right_length}+{right_padding}={right_length+right_padding}), " +
+              f"Borders=3")
+        
+        # Force correct width by adjusting right padding
+        right_padding += (Box.DEFAULT_WIDTH - result_length)
+        result = (Box.VERTICAL +                 # Left border
+                  left_content +                 # Left content
+                  ' ' * left_padding +           # Left padding
+                  Box.VERTICAL +                 # Middle border
+                  right_content +                # Right content 
+                  ' ' * right_padding +          # Right padding
+                  Box.VERTICAL)                  # Right border
     
-    # Format right content with exact padding to fill the available space
-    right_padding = available_right_width - len(strip_color_codes(right_content))
-    if right_padding < 0:
-        # If content is too long, truncate it
-        right_content = right_content[:available_right_width - 3] + "..." + Colors.RESET
-        right_padding = 0
-    
-    # Build the complete line with perfect alignment
-    line = f"{left_side}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
-    
-    # Verify the line is exactly the right length (including color codes)
-    line_no_color = strip_color_codes(line)
-    if len(line_no_color) != Box.DEFAULT_WIDTH:
-        # Detailed warning to help debug alignment issues
-        print(f"Alignment warning: Line length {len(line_no_color)} != {Box.DEFAULT_WIDTH}, " +
-              f"left_side_visible_len={left_side_visible_len}, right_side_visible_len={right_side_visible_len}, " +
-              f"left_content_len={len(strip_color_codes(left_content))}, padding={left_padding}, " +
-              f"right_content_len={len(strip_color_codes(right_content))}, right_padding={right_padding}")
-    
-    return line
+    return result
 
 
 def get_weather_data():
@@ -1274,7 +1289,7 @@ def display_wtop():
     # Weather type for icon selection
     weather_type = weather_data["weather"][0]["description"].lower()
     
-    # Title bar with proper centering - using static box width
+    # Title bar with proper centering
     title = f"WTOP - Weather Dashboard for {CITY}, {STATE}"
     title_content = f"{Colors.CYAN}{Colors.BOLD}{title}{Colors.RESET}"
     
@@ -1284,7 +1299,7 @@ def display_wtop():
     centered_title = ' ' * title_padding + title_content + ' ' * (Box.DEFAULT_WIDTH - 2 - len(title_no_color) - title_padding)
     print(f" {centered_title} ")
     
-    # Start the current conditions box with static top border
+    # Start the current conditions box
     print(Box.SINGLE_TOP)
     
     # Format the time
@@ -1409,17 +1424,8 @@ def display_wtop():
     # Build a completely static forecast box with fixed borders
     print()  # Add a blank line for visual separation
     
-    # Use the pre-defined static dimensions from Box class
-    box_width = Box.DEFAULT_WIDTH
-    left_width = Box.LEFT_COLUMN_WIDTH + 1  # +1 for left border
-    right_width = Box.RIGHT_COLUMN_WIDTH + 1  # +1 for middle border
-    
-    # These are redundant - remove them since we're using Box constants
-    
-    # Make these global in the function scope for other calculations
-    global left_column_width, right_column_width
-    left_column_width = left_width - 1  # -1 for the left border
-    right_column_width = right_width - 2  # -2 for middle and right borders
+    # No need to recalculate dimensions - they're all defined in the Box class
+    # This ensures perfect alignment of all borders
     
     # Draw fixed top border
     print(Box.FORECAST_TOP)
