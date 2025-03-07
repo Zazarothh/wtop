@@ -255,8 +255,12 @@ class Colors:
     MAGENTA = "\033[35m"
     WHITE = "\033[37m"
     
-# Box drawing characters
+# Box drawing characters - use static borders for perfect alignment
 class Box:
+    # Static box width to ensure perfect alignment
+    DEFAULT_WIDTH = 130
+    
+    # Box characters
     HORIZONTAL = "─"
     VERTICAL = "│"
     TOP_LEFT = "┌"
@@ -268,6 +272,11 @@ class Box:
     TOP_T = "┬"
     BOTTOM_T = "┴"
     CROSS = "┼"
+    
+    # Pre-defined border lines for perfect alignment
+    TOP_BORDER = "┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+    BOTTOM_BORDER = "└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+    DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     
 # For calculating color escape sequence lengths
 def strip_color_codes(text):
@@ -373,12 +382,12 @@ def draw_hourly_forecast_table(forecasts, box_width):
     
     return lines
 
-def draw_box_line(content, width, left_char=Box.VERTICAL, right_char=Box.VERTICAL):
-    """Draw a line of a box with perfect alignment.
+def draw_box_line(content, width=Box.DEFAULT_WIDTH, left_char=Box.VERTICAL, right_char=Box.VERTICAL):
+    """Draw a line of a box with perfect alignment using fixed width.
     
     Args:
         content: The content to display inside the box line
-        width: Total width of the box including borders
+        width: Total width of the box including borders (uses default width for consistency)
         left_char: Character to use for left border
         right_char: Character to use for right border
     
@@ -399,25 +408,14 @@ def draw_box_line(content, width, left_char=Box.VERTICAL, right_char=Box.VERTICA
     
     # Build the final line with exact width
     line = f"{left_char}{content}{' ' * padding}{right_char}"
-    
-    # Verify the width is exactly as expected
-    if len(strip_color_codes(line)) != width:
-        # If not, adjust padding to make it exact (shouldn't happen with correct calculation)
-        actual_width = len(strip_color_codes(line))
-        if actual_width < width:
-            # Add more padding
-            line = line[:-1] + " " * (width - actual_width) + right_char
-        else:
-            # Remove excess padding
-            line = line[:-(actual_width - width + 1)] + right_char
             
     return line
 
-def draw_horizontal_line(width, left_char=Box.LEFT_T, middle_char=Box.HORIZONTAL, right_char=Box.RIGHT_T):
-    """Draw a horizontal line for a box with perfect alignment.
+def draw_horizontal_line(width=Box.DEFAULT_WIDTH, left_char=Box.LEFT_T, middle_char=Box.HORIZONTAL, right_char=Box.RIGHT_T):
+    """Draw a horizontal line for a box with perfect alignment using fixed width.
     
     Args:
-        width: Total width of the box including corners
+        width: Total width of the box including corners (uses default width for consistency)
         left_char: Character for the left side of the line
         middle_char: Character for the horizontal part of the line
         right_char: Character for the right side of the line
@@ -425,19 +423,25 @@ def draw_horizontal_line(width, left_char=Box.LEFT_T, middle_char=Box.HORIZONTAL
     Returns:
         A perfectly sized horizontal line
     """
-    # Ensure exact width by calculating the number of middle characters needed
-    inner_width = width - 2  # Width without corners
+    # Use the pre-defined borders for standard cases
+    if left_char == Box.TOP_LEFT and right_char == Box.TOP_RIGHT:
+        return Box.TOP_BORDER
+    elif left_char == Box.BOTTOM_LEFT and right_char == Box.BOTTOM_RIGHT:
+        return Box.BOTTOM_BORDER
+    elif left_char == Box.LEFT_T and right_char == Box.RIGHT_T:
+        return Box.DIVIDER
     
-    # Build the line with exact width
+    # Fallback for custom characters - ensure exact width
+    inner_width = width - 2  # Width without corners
     return f"{left_char}{middle_char * inner_width}{right_char}"
 
-def draw_box_top(width):
+def draw_box_top(width=Box.DEFAULT_WIDTH):
     """Draw the top line of a box with perfect width."""
-    return draw_horizontal_line(width, Box.TOP_LEFT, Box.HORIZONTAL, Box.TOP_RIGHT)
+    return Box.TOP_BORDER
 
-def draw_box_bottom(width):
+def draw_box_bottom(width=Box.DEFAULT_WIDTH):
     """Draw the bottom line of a box with perfect width."""
-    return draw_horizontal_line(width, Box.BOTTOM_LEFT, Box.HORIZONTAL, Box.BOTTOM_RIGHT)
+    return Box.BOTTOM_BORDER
 
 
 def get_weather_data():
@@ -1069,25 +1073,13 @@ def display_wtop():
             print("Please update the API_KEY in the script with your OpenWeatherMap API key.")
         return
     
-    # Try to detect terminal size
-    try:
-        terminal_width = os.get_terminal_size().columns
-    except (AttributeError, OSError):
-        terminal_width = 100  # Default if can't detect
-        
-    # Ensure minimum width
-    if terminal_width < 130:  # Increased minimum width to accommodate side-by-side layout
-        terminal_width = 130
-        
-    # Calculate column widths based on terminal size
-    main_box_width = terminal_width - 2  # Leave a little margin
+    # Use fixed box width for all components to ensure perfect alignment
+    box_width = Box.DEFAULT_WIDTH
+    main_box_width = box_width
     
-    # Set widths for side-by-side forecast boxes
-    hourly_width = (main_box_width * 2) // 3  # hourly takes 2/3 of width
-    daily_width = main_box_width - hourly_width - 3  # daily takes 1/3, -3 for separator
-    
-    # Set box width for conditions box
-    box_width = main_box_width  # Use main_box_width for consistency
+    # Set widths for side-by-side forecast boxes - static values for consistency
+    hourly_width = 86  # Fixed width for hourly column
+    daily_width = 43   # Fixed width for daily column
     
     # Extract weather data we'll need
     temp = weather_data["main"]["temp"]
@@ -1259,18 +1251,23 @@ def display_wtop():
     # Build a completely static forecast box with fixed borders
     print()  # Add a blank line for visual separation
     
-    # Fixed box dimensions - define at the very top to be available throughout
-    box_width = 130  # Fixed width for the entire box
-    left_width = 86  # Fixed width for left column (including left border)
-    right_width = 43  # Fixed width for right column (including middle and right border)
+    # Static box dimensions for consistency
+    box_width = Box.DEFAULT_WIDTH
+    left_width = hourly_width
+    right_width = daily_width
+    
+    # Static borders for forecast table
+    FORECAST_TOP_BORDER = "┌────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┐"
+    FORECAST_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┤"
+    FORECAST_BOTTOM_BORDER = "└────────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────┘"
     
     # Make these global in the function scope for other calculations
     global left_column_width, right_column_width
     left_column_width = left_width - 1  # -1 for the left border
     right_column_width = right_width - 2  # -2 for middle and right borders
     
-    # Draw fixed top border (won't ever change regardless of content)
-    print("┌────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┐")
+    # Draw fixed top border
+    print(FORECAST_TOP_BORDER)
     
     # Draw fixed title row
     title = f"{Colors.BOLD}Weather Forecast{Colors.RESET}"
@@ -1278,7 +1275,7 @@ def display_wtop():
     print(f"│{title_centered}│")
     
     # Draw fixed division line below title
-    print("├────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┤")
+    print(FORECAST_DIVIDER)
     
     # Draw fixed section headers
     left_header = f"{Colors.BOLD}Hourly Forecast (Next 12 Hours){Colors.RESET}"
@@ -1666,8 +1663,8 @@ def display_wtop():
         
         print(row)
     
-    # Draw the completely static bottom border (never changes)
-    print("└────────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────┘")
+    # Draw the completely static bottom border
+    print(FORECAST_BOTTOM_BORDER)
 
 
 def main():
@@ -1699,19 +1696,23 @@ def main():
             except (AttributeError, OSError):
                 terminal_width = 100
             
-            # Show status message in a clean box
+            # Static status message box
             exit_msg = "Press Ctrl+C to exit"
             update_msg = "Auto-updating every 5 seconds"
             combined_msg = f"{update_msg} | {exit_msg}"
             
-            # Center the message
-            status_box_width = len(combined_msg) + 4  # Add padding
-            status_padding = (terminal_width - status_box_width) // 2
+            # Static status box borders
+            STATUS_BOX_WIDTH = len(combined_msg) + 4
+            STATUS_TOP_BORDER = "┌" + "─" * (STATUS_BOX_WIDTH - 2) + "┐"
+            STATUS_BOTTOM_BORDER = "└" + "─" * (STATUS_BOX_WIDTH - 2) + "┘"
+            
+            # Center the message with fixed width
+            status_padding = (Box.DEFAULT_WIDTH - STATUS_BOX_WIDTH) // 2
             
             # Print a small box with the status message
-            print(" " * status_padding + draw_box_top(status_box_width))
-            print(" " * status_padding + draw_box_line(combined_msg, status_box_width))
-            print(" " * status_padding + draw_box_bottom(status_box_width))
+            print(" " * status_padding + STATUS_TOP_BORDER)
+            print(" " * status_padding + "│ " + combined_msg + " │") 
+            print(" " * status_padding + STATUS_BOTTOM_BORDER)
             
             # Sleep for 5 seconds before refreshing
             time.sleep(5)
