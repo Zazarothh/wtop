@@ -273,9 +273,6 @@ class Box:
     BOTTOM_T = "┴"
     CROSS = "┼"
     
-    # The split position for forecast table
-    SPLIT_POSITION = 86
-    
     # ===== MAIN BOX BORDERS =====
     # Manually set each border to the exact width - these need to be 130 characters each
     SINGLE_TOP =    "┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
@@ -283,16 +280,43 @@ class Box:
     SINGLE_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     
     # ===== FORECAST TABLE BORDERS =====
-    # Manually set each border with the split at exactly the right position
-    # Each border is exactly 130 characters wide with perfect alignment
+    # Manually set each border with the split at exactly the right position - each string is 130 characters
     FORECAST_TOP    = "┌─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┐"
     FORECAST_BOTTOM = "└─────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────┘"
     FORECAST_DIVIDER = "├─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┤"
     
-    # Fixed column widths - calculated to match the borders exactly
-    LEFT_COLUMN_WIDTH = SPLIT_POSITION - 1  # -1 for the left border
-    RIGHT_COLUMN_WIDTH = DEFAULT_WIDTH - SPLIT_POSITION - 2  # -2 for the middle and right borders
-    
+    # Calculate column widths directly from the borders for perfect alignment
+    @classmethod
+    def initialize_column_widths(cls):
+        """Calculate the exact column widths from the border strings."""
+        # Find the vertical bar position in the FORECAST_TOP string
+        # We need to find where the "┬" character is in the FORECAST_TOP border
+        # This is the middle divider that separates the two columns
+        try:
+            # First check for "┬" character which is the proper T-junction
+            cls.SPLIT_POSITION = cls.FORECAST_TOP.index("┬")
+            # If there's no T-junction, look for a pipe character
+            if cls.SPLIT_POSITION == -1:
+                cls.SPLIT_POSITION = cls.FORECAST_TOP.rindex("│")
+        except ValueError:
+            # If no proper divider found, fallback to searching for "├" 
+            # in the FORECAST_DIVIDER
+            try:
+                cls.SPLIT_POSITION = cls.FORECAST_DIVIDER.index("┬")
+                if cls.SPLIT_POSITION == -1:
+                    # Last resort fallback
+                    cls.SPLIT_POSITION = 94  # Based on our output above
+            except ValueError:
+                # Last resort fallback
+                cls.SPLIT_POSITION = 94  # Based on our output above
+        
+        # Set column widths using the exact split position we found
+        cls.LEFT_COLUMN_WIDTH = cls.SPLIT_POSITION - 1  # -1 for the left border
+        cls.RIGHT_COLUMN_WIDTH = cls.DEFAULT_WIDTH - cls.SPLIT_POSITION - 2  # -2 for the middle and right borders
+        
+        # Set the right border position for ensuring perfect alignment
+        cls.RIGHT_BORDER_POSITION = cls.DEFAULT_WIDTH - 1
+
     # Validate border widths at class load time
     @classmethod
     def validate_borders(cls):
@@ -304,6 +328,10 @@ class Box:
         print(f"FORECAST_BOTTOM length: {len(cls.FORECAST_BOTTOM)} (should be {cls.DEFAULT_WIDTH})")
         print(f"FORECAST_DIVIDER length: {len(cls.FORECAST_DIVIDER)} (should be {cls.DEFAULT_WIDTH})")
         print(f"Column widths: {cls.LEFT_COLUMN_WIDTH} + {cls.RIGHT_COLUMN_WIDTH} + 3 = {cls.LEFT_COLUMN_WIDTH + cls.RIGHT_COLUMN_WIDTH + 3} (should be {cls.DEFAULT_WIDTH})")
+        print(f"Split position: {cls.FORECAST_TOP.index('┬')} (this is where the middle divider is)")
+
+# Initialize Box class column widths
+Box.initialize_column_widths()
 
 # Validate borders at module load time
 Box.validate_borders()
@@ -545,14 +573,35 @@ def draw_forecast_line(left_content="", right_content=""):
             right_content = right_content[:Box.RIGHT_COLUMN_WIDTH - 3] + "..." + Colors.RESET
         right_padding = 0
     
-    # Build the line with exact column widths
-    line = f"{Box.VERTICAL}{left_content}{' ' * left_padding}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
+    # Build the line with exact column widths using the actual split position we measured
+    # The key to perfect alignment is using the exact split position
+    
+    # First format the left column with proper padding
+    left_side = f"{Box.VERTICAL}{left_content}{' ' * left_padding}"
+    
+    # Calculate how much space is left for the right column
+    # This ensures the right border is exactly at DEFAULT_WIDTH
+    left_side_visible_len = len(strip_color_codes(left_side))
+    available_right_width = Box.DEFAULT_WIDTH - left_side_visible_len - 2  # -2 for the middle border and right border
+    
+    # Format right content with exact padding to fill the available space
+    right_padding = available_right_width - len(strip_color_codes(right_content))
+    if right_padding < 0:
+        # If content is too long, truncate it
+        right_content = right_content[:available_right_width - 3] + "..." + Colors.RESET
+        right_padding = 0
+    
+    # Build the complete line with perfect alignment
+    line = f"{left_side}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
     
     # Verify the line is exactly the right length (including color codes)
     line_no_color = strip_color_codes(line)
     if len(line_no_color) != Box.DEFAULT_WIDTH:
-        # This shouldn't happen with correctly calculated padding, but just in case
-        print(f"Warning: Forecast line length {len(line_no_color)} doesn't match expected {Box.DEFAULT_WIDTH}")
+        # Detailed warning to help debug alignment issues
+        print(f"Alignment warning: Line length {len(line_no_color)} != {Box.DEFAULT_WIDTH}, " +
+              f"left_side_visible_len={left_side_visible_len}, right_side_visible_len={right_side_visible_len}, " +
+              f"left_content_len={len(strip_color_codes(left_content))}, padding={left_padding}, " +
+              f"right_content_len={len(strip_color_codes(right_content))}, right_padding={right_padding}")
     
     return line
 
