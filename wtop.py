@@ -255,9 +255,9 @@ class Colors:
     MAGENTA = "\033[35m"
     WHITE = "\033[37m"
     
-# Box drawing characters - use static borders for perfect alignment
+# Box drawing characters and static borders for perfect alignment
 class Box:
-    # Static box width to ensure perfect alignment
+    # Fixed width for all boxes (main console width)
     DEFAULT_WIDTH = 130
     
     # Box characters
@@ -273,10 +273,26 @@ class Box:
     BOTTOM_T = "┴"
     CROSS = "┼"
     
-    # Pre-defined border lines for perfect alignment
-    TOP_BORDER = "┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-    BOTTOM_BORDER = "└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
-    DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
+    # ===== MAIN BOX BORDERS =====
+    # These are exactly DEFAULT_WIDTH characters wide
+    SINGLE_TOP = "┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+    SINGLE_BOTTOM = "└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+    SINGLE_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
+    
+    # ===== FORECAST TABLE BORDERS =====
+    # For the split top-level forecast display (hourly | daily)
+    # These are exactly DEFAULT_WIDTH characters wide with the split at the right position
+    FORECAST_TOP = "┌────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┐"
+    FORECAST_BOTTOM = "└────────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────┘"
+    FORECAST_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┤"
+    
+    # Fixed column widths for the forecast table
+    LEFT_COLUMN_WIDTH = 84  # Width between │ and │ (not including borders)
+    RIGHT_COLUMN_WIDTH = 41  # Width between │ and │ (not including borders)
+    
+    # Fixed constants for padding calculations
+    EMPTY_LEFT_COLUMN = "│                                                                                    "
+    EMPTY_RIGHT_COLUMN = "                                         │"
     
 # For calculating color escape sequence lengths
 def strip_color_codes(text):
@@ -382,66 +398,102 @@ def draw_hourly_forecast_table(forecasts, box_width):
     
     return lines
 
-def draw_box_line(content, width=Box.DEFAULT_WIDTH, left_char=Box.VERTICAL, right_char=Box.VERTICAL):
-    """Draw a line of a box with perfect alignment using fixed width.
+# Simplified box drawing functions that rely on static borders
+
+def draw_box_line(content, box_type="single"):
+    """Draw a line of content in a box with perfect alignment.
     
     Args:
         content: The content to display inside the box line
-        width: Total width of the box including borders (uses default width for consistency)
-        left_char: Character to use for left border
-        right_char: Character to use for right border
+        box_type: Type of box ('single' or 'forecast')
     
     Returns:
         Perfectly aligned box line with exact width
     """
     content_no_color = strip_color_codes(content)
     
-    # Calculate exactly how much padding we need to reach the desired width
-    inner_width = width - 2  # Width without the borders
-    content_width = len(content_no_color)
-    padding = inner_width - content_width
-    
-    if padding < 0:
-        # Content is too wide, truncate it
-        truncated_length = inner_width - 3  # Allow for "..."
-        return f"{left_char}{content[:truncated_length]}...{right_char}"
-    
-    # Build the final line with exact width
-    line = f"{left_char}{content}{' ' * padding}{right_char}"
+    if box_type == "single":
+        # Basic single-column box
+        inner_width = Box.DEFAULT_WIDTH - 2  # Width without the borders
+        content_width = len(content_no_color)
+        padding = inner_width - content_width
+        
+        if padding < 0:
+            # Content is too wide, truncate it
+            truncated_length = inner_width - 3  # Allow for "..."
+            return f"{Box.VERTICAL}{content[:truncated_length]}...{Box.VERTICAL}"
+        
+        # Build the final line with exact width
+        return f"{Box.VERTICAL}{content}{' ' * padding}{Box.VERTICAL}"
+        
+    elif box_type == "forecast":
+        # Split forecast box with two columns
+        if "|" in content:
+            # Content contains a column separator
+            left_content, right_content = content.split("|", 1)
             
-    return line
+            left_content_no_color = strip_color_codes(left_content)
+            right_content_no_color = strip_color_codes(right_content)
+            
+            # Calculate padding for each column
+            left_padding = Box.LEFT_COLUMN_WIDTH - len(left_content_no_color)
+            right_padding = Box.RIGHT_COLUMN_WIDTH - len(right_content_no_color)
+            
+            if left_padding < 0:
+                left_content = left_content[:Box.LEFT_COLUMN_WIDTH - 3] + "..."
+                left_padding = 0
+                
+            if right_padding < 0:
+                right_content = right_content[:Box.RIGHT_COLUMN_WIDTH - 3] + "..."
+                right_padding = 0
+            
+            # Build the line with exact column widths
+            return f"{Box.VERTICAL}{left_content}{' ' * left_padding}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
+        else:
+            # Single content centered across both columns
+            inner_width = Box.DEFAULT_WIDTH - 2  # Width without the borders
+            content_width = len(content_no_color)
+            padding = inner_width - content_width
+            
+            if padding < 0:
+                # Content is too wide, truncate it
+                truncated_length = inner_width - 3  # Allow for "..."
+                return f"{Box.VERTICAL}{content[:truncated_length]}...{Box.VERTICAL}"
+            
+            # Calculate centering
+            left_padding = padding // 2
+            right_padding = padding - left_padding
+            
+            # Build the centered line
+            return f"{Box.VERTICAL}{' ' * left_padding}{content}{' ' * right_padding}{Box.VERTICAL}"
 
-def draw_horizontal_line(width=Box.DEFAULT_WIDTH, left_char=Box.LEFT_T, middle_char=Box.HORIZONTAL, right_char=Box.RIGHT_T):
-    """Draw a horizontal line for a box with perfect alignment using fixed width.
+def draw_forecast_line(left_content="", right_content=""):
+    """Draw a line in the forecast box with content in both columns.
     
     Args:
-        width: Total width of the box including corners (uses default width for consistency)
-        left_char: Character for the left side of the line
-        middle_char: Character for the horizontal part of the line
-        right_char: Character for the right side of the line
-    
+        left_content: Content for the left column
+        right_content: Content for the right column
+        
     Returns:
-        A perfectly sized horizontal line
+        Formatted line with proper borders and padding
     """
-    # Use the pre-defined borders for standard cases
-    if left_char == Box.TOP_LEFT and right_char == Box.TOP_RIGHT:
-        return Box.TOP_BORDER
-    elif left_char == Box.BOTTOM_LEFT and right_char == Box.BOTTOM_RIGHT:
-        return Box.BOTTOM_BORDER
-    elif left_char == Box.LEFT_T and right_char == Box.RIGHT_T:
-        return Box.DIVIDER
+    left_no_color = strip_color_codes(left_content)
+    right_no_color = strip_color_codes(right_content)
     
-    # Fallback for custom characters - ensure exact width
-    inner_width = width - 2  # Width without corners
-    return f"{left_char}{middle_char * inner_width}{right_char}"
-
-def draw_box_top(width=Box.DEFAULT_WIDTH):
-    """Draw the top line of a box with perfect width."""
-    return Box.TOP_BORDER
-
-def draw_box_bottom(width=Box.DEFAULT_WIDTH):
-    """Draw the bottom line of a box with perfect width."""
-    return Box.BOTTOM_BORDER
+    # Calculate padding for each column
+    left_padding = Box.LEFT_COLUMN_WIDTH - len(left_no_color)
+    right_padding = Box.RIGHT_COLUMN_WIDTH - len(right_no_color)
+    
+    if left_padding < 0:
+        left_content = left_content[:Box.LEFT_COLUMN_WIDTH - 3] + "..."
+        left_padding = 0
+        
+    if right_padding < 0:
+        right_content = right_content[:Box.RIGHT_COLUMN_WIDTH - 3] + "..."
+        right_padding = 0
+    
+    # Build the line with exact column widths
+    return f"{Box.VERTICAL}{left_content}{' ' * left_padding}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
 
 
 def get_weather_data():
@@ -1073,13 +1125,8 @@ def display_wtop():
             print("Please update the API_KEY in the script with your OpenWeatherMap API key.")
         return
     
-    # Use fixed box width for all components to ensure perfect alignment
-    box_width = Box.DEFAULT_WIDTH
-    main_box_width = box_width
-    
-    # Set widths for side-by-side forecast boxes - static values for consistency
-    hourly_width = 86  # Fixed width for hourly column
-    daily_width = 43   # Fixed width for daily column
+    # Use static borders for perfect alignment - no width calculations needed
+    # All borders are predefined with exact character counts
     
     # Extract weather data we'll need
     temp = weather_data["main"]["temp"]
@@ -1117,17 +1164,18 @@ def display_wtop():
     # Weather type for icon selection
     weather_type = weather_data["weather"][0]["description"].lower()
     
-    # Title bar with proper centering
+    # Title bar with proper centering - using static box width
     title = f"WTOP - Weather Dashboard for {CITY}, {STATE}"
     title_content = f"{Colors.CYAN}{Colors.BOLD}{title}{Colors.RESET}"
     
-    # Calculate proper centering
-    title_padding = (box_width - len(title)) // 2
-    centered_title = ' ' * title_padding + title_content
-    print(draw_box_line(centered_title, box_width, ' ', ' '))
+    # Create centered title with exact padding
+    title_no_color = strip_color_codes(title_content)
+    title_padding = (Box.DEFAULT_WIDTH - 2 - len(title_no_color)) // 2
+    centered_title = ' ' * title_padding + title_content + ' ' * (Box.DEFAULT_WIDTH - 2 - len(title_no_color) - title_padding)
+    print(f" {centered_title} ")
     
-    # Start the current conditions box
-    print(draw_box_top(box_width))
+    # Start the current conditions box with static top border
+    print(Box.SINGLE_TOP)
     
     # Format the time
     time_section = f"{Colors.BOLD}Current Time:{Colors.RESET} {current_time}"
@@ -1149,9 +1197,9 @@ def display_wtop():
     # Construct first line content with proper spacing
     first_line = f"{icon_line}{conditions_text}"
     # Add time to the middle of the box
-    half_point = (box_width - len(strip_color_codes(first_line)) - len(strip_color_codes(time_section))) // 2
+    half_point = (Box.DEFAULT_WIDTH - 2 - len(strip_color_codes(first_line)) - len(strip_color_codes(time_section))) // 2
     first_line_content = f"{first_line}{' ' * half_point}{time_section}"
-    print(draw_box_line(first_line_content, box_width))
+    print(draw_box_line(first_line_content))
     
     # Temperature line
     if "clear" in weather_type:
@@ -1164,7 +1212,7 @@ def display_wtop():
         icon_line = ""
     
     temp_line = f"{icon_line} {Colors.BOLD}Temperature:{Colors.RESET} {temp_color}{temp:.1f}°F{Colors.RESET} / {temp_color}{(temp-32)*5/9:.1f}°C{Colors.RESET}"
-    print(draw_box_line(temp_line, box_width))
+    print(draw_box_line(temp_line))
     
     # Feels like line
     if "clear" in weather_type:
@@ -1177,7 +1225,7 @@ def display_wtop():
         icon_line = ""
     
     feels_line = f"{icon_line} {Colors.BOLD}Feels Like:{Colors.RESET} {temp_color}{feels_like:.1f}°F{Colors.RESET}"
-    print(draw_box_line(feels_line, box_width))
+    print(draw_box_line(feels_line))
     
     # Condition line
     if "clear" in weather_type:
@@ -1190,7 +1238,7 @@ def display_wtop():
         icon_line = ""
     
     condition_line = f"{icon_line} {Colors.BOLD}Condition:{Colors.RESET} {weather_desc}"
-    print(draw_box_line(condition_line, box_width))
+    print(draw_box_line(condition_line))
     
     # Wind line
     if "clear" in weather_type:
@@ -1203,15 +1251,15 @@ def display_wtop():
         icon_line = ""
     
     wind_line = f"{icon_line} {Colors.BOLD}Wind:{Colors.RESET} {wind_speed} mph {wind_dir} {Colors.CYAN}{wind_arrow}{Colors.RESET}"
-    print(draw_box_line(wind_line, box_width))
+    print(draw_box_line(wind_line))
     
     # Sun info line
     sun_info = f"{' ' * 20} {Colors.BOLD}Sunrise:{Colors.RESET} {Colors.YELLOW}{sunrise}{Colors.RESET}  {Colors.BOLD}Sunset:{Colors.RESET} {Colors.MAGENTA}{sunset}{Colors.RESET}"
-    print(draw_box_line(sun_info, box_width))
+    print(draw_box_line(sun_info))
     
     # System stats header
     system_stats = f"{Colors.BOLD}System Stats:{Colors.RESET}"
-    print(draw_box_line(system_stats, box_width))
+    print(draw_box_line(system_stats))
     
     # Normalize values to percentages
     # Pressure: normal range 970-1030 hPa, normalize to percentage scale
@@ -1230,22 +1278,22 @@ def display_wtop():
     
     # First row: Humidity gauge
     humidity_gauge = draw_gauge_bar(humidity, 100, gauge_bar_width, humidity_label)
-    print(draw_box_line(humidity_gauge, box_width))
+    print(draw_box_line(humidity_gauge))
     
     # Second row: Cloud Cover gauge
     cloud_gauge = draw_gauge_bar(clouds, 100, gauge_bar_width, cloud_label)
-    print(draw_box_line(cloud_gauge, box_width))
+    print(draw_box_line(cloud_gauge))
     
     # Third row: Pressure gauge
     pressure_gauge = draw_gauge_bar(pressure_percentage, 100, gauge_bar_width, pressure_label)
-    print(draw_box_line(pressure_gauge, box_width))
+    print(draw_box_line(pressure_gauge))
     
     # Fourth row: Visibility gauge
     visibility_gauge = draw_gauge_bar(visibility_percentage, 100, gauge_bar_width, visibility_label)
-    print(draw_box_line(visibility_gauge, box_width))
+    print(draw_box_line(visibility_gauge))
     
     # Close the current conditions box
-    print(draw_box_bottom(main_box_width))
+    print(Box.SINGLE_BOTTOM)
     print()  # Add a blank line for visual separation
         
     # Build a completely static forecast box with fixed borders
@@ -1267,25 +1315,25 @@ def display_wtop():
     right_column_width = right_width - 2  # -2 for middle and right borders
     
     # Draw fixed top border
-    print(FORECAST_TOP_BORDER)
+    print(Box.FORECAST_TOP)
     
     # Draw fixed title row
     title = f"{Colors.BOLD}Weather Forecast{Colors.RESET}"
-    title_centered = title.center(box_width - 2)  # -2 for the left and right borders
-    print(f"│{title_centered}│")
+    # Create exact centered title
+    title_no_color = strip_color_codes(title)
+    padding = (Box.DEFAULT_WIDTH - 2 - len(title_no_color)) // 2
+    title_centered = ' ' * padding + title + ' ' * (Box.DEFAULT_WIDTH - 2 - len(title_no_color) - padding)
+    print(f"{Box.VERTICAL}{title_centered}{Box.VERTICAL}")
     
     # Draw fixed division line below title
-    print(FORECAST_DIVIDER)
+    print(Box.FORECAST_DIVIDER)
     
     # Draw fixed section headers
     left_header = f"{Colors.BOLD}Hourly Forecast (Next 12 Hours){Colors.RESET}"
     right_header = f"{Colors.BOLD}7-Day Forecast{Colors.RESET}"
     
-    # Center headers in their respective sections
-    left_header_centered = left_header.center(left_width - 1)  # -1 for left border
-    right_header_centered = right_header.center(right_width - 1)  # -1 for middle border
-    
-    print(f"│{left_header_centered}│{right_header_centered}│")
+    # Use the draw_forecast_line function for perfect column alignment
+    print(draw_forecast_line(left_header, right_header))
     
     # ------ Step 2: Generate the forecast data ------
     
@@ -1617,54 +1665,15 @@ def display_wtop():
     
     # Process and display each content row with fixed borders
     for i in range(content_rows):
-        # Start with a completely empty row with just borders
-        row = "│" + " " * (left_width - 1) + "│" + " " * (right_width - 2) + "│"
+        # Get row data from each column
+        left_content = hourly_data[i] if i < len(hourly_data) else ""
+        right_content = daily_data[i] if i < len(daily_data) else ""
         
-        # Get row data, ensuring it fits within column
-        left_content = hourly_data[i].ljust(left_width - 1) if i < len(hourly_data) else " " * (left_width - 1)
-        right_content = daily_data[i].ljust(right_width - 2) if i < len(daily_data) else " " * (right_width - 2)
-        
-        # Truncate each content section if too long (account for color codes)
-        left_content_visible_len = len(strip_color_codes(left_content))
-        if left_content_visible_len > left_width - 1:
-            # Find position to truncate while preserving color codes
-            visible_pos = 0
-            for j in range(len(left_content)):
-                if left_content[j:j+5].startswith("\033["):
-                    # Skip color codes
-                    color_end = left_content.find("m", j)
-                    if color_end != -1:
-                        j = color_end
-                else:
-                    visible_pos += 1
-                if visible_pos >= left_width - 4:  # Leave room for "..."
-                    left_content = left_content[:j] + "..." + Colors.RESET
-                    break
-        
-        right_content_visible_len = len(strip_color_codes(right_content))
-        if right_content_visible_len > right_width - 2:
-            # Find position to truncate while preserving color codes
-            visible_pos = 0
-            for j in range(len(right_content)):
-                if right_content[j:j+5].startswith("\033["):
-                    # Skip color codes
-                    color_end = right_content.find("m", j)
-                    if color_end != -1:
-                        j = color_end
-                else:
-                    visible_pos += 1
-                if visible_pos >= right_width - 5:  # Leave room for "..."
-                    right_content = right_content[:j] + "..." + Colors.RESET
-                    break
-        
-        # Calculate content sections (these will never change the borders)
-        row_parts = row.split("│")
-        row = "│" + left_content + "│" + right_content + "│"
-        
-        print(row)
+        # Use our specialized function to draw the row with perfect alignment
+        print(draw_forecast_line(left_content, right_content))
     
     # Draw the completely static bottom border
-    print(FORECAST_BOTTOM_BORDER)
+    print(Box.FORECAST_BOTTOM)
 
 
 def main():
@@ -1696,23 +1705,19 @@ def main():
             except (AttributeError, OSError):
                 terminal_width = 100
             
-            # Static status message box
+            # Create a simple status message
             exit_msg = "Press Ctrl+C to exit"
             update_msg = "Auto-updating every 5 seconds"
             combined_msg = f"{update_msg} | {exit_msg}"
             
-            # Static status box borders
-            STATUS_BOX_WIDTH = len(combined_msg) + 4
-            STATUS_TOP_BORDER = "┌" + "─" * (STATUS_BOX_WIDTH - 2) + "┐"
-            STATUS_BOTTOM_BORDER = "└" + "─" * (STATUS_BOX_WIDTH - 2) + "┘"
+            # Calculate exact centering
+            msg_len = len(combined_msg)
+            left_padding = (Box.DEFAULT_WIDTH - msg_len) // 2
+            right_padding = Box.DEFAULT_WIDTH - msg_len - left_padding
             
-            # Center the message with fixed width
-            status_padding = (Box.DEFAULT_WIDTH - STATUS_BOX_WIDTH) // 2
-            
-            # Print a small box with the status message
-            print(" " * status_padding + STATUS_TOP_BORDER)
-            print(" " * status_padding + "│ " + combined_msg + " │") 
-            print(" " * status_padding + STATUS_BOTTOM_BORDER)
+            # Print message without a box for simplicity
+            print()
+            print(' ' * left_padding + combined_msg + ' ' * right_padding)
             
             # Sleep for 5 seconds before refreshing
             time.sleep(5)
