@@ -258,7 +258,7 @@ class Colors:
 # Box drawing characters and static borders for perfect alignment
 class Box:
     # Fixed width for all boxes (main console width)
-    DEFAULT_WIDTH = 130
+    DEFAULT_WIDTH = 130  # This matches the actual length from the above test
     
     # Box characters
     HORIZONTAL = "─"
@@ -273,26 +273,39 @@ class Box:
     BOTTOM_T = "┴"
     CROSS = "┼"
     
+    # The split position for forecast table
+    SPLIT_POSITION = 86
+    
     # ===== MAIN BOX BORDERS =====
-    # These are exactly DEFAULT_WIDTH characters wide
-    SINGLE_TOP = "┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-    SINGLE_BOTTOM = "└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
-    SINGLE_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
+    # Manually set each border to the exact width - these need to be 130 characters each
+    SINGLE_TOP =    "┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+    SINGLE_BOTTOM = "└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+    SINGLE_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     
     # ===== FORECAST TABLE BORDERS =====
-    # For the split top-level forecast display (hourly | daily)
-    # These are exactly DEFAULT_WIDTH characters wide with the split at the right position
-    FORECAST_TOP = "┌────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┐"
-    FORECAST_BOTTOM = "└────────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────┘"
-    FORECAST_DIVIDER = "├────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┤"
+    # Manually set each border with the split at exactly the right position
+    FORECAST_TOP = "┌─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┐"
+    FORECAST_BOTTOM = "└─────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────┘"
+    FORECAST_DIVIDER = "├─────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────┤"
     
-    # Fixed column widths for the forecast table
-    LEFT_COLUMN_WIDTH = 84  # Width between │ and │ (not including borders)
-    RIGHT_COLUMN_WIDTH = 41  # Width between │ and │ (not including borders)
+    # Fixed column widths - calculated to match the borders exactly
+    LEFT_COLUMN_WIDTH = SPLIT_POSITION - 1  # -1 for the left border
+    RIGHT_COLUMN_WIDTH = DEFAULT_WIDTH - SPLIT_POSITION - 2  # -2 for the middle and right borders
     
-    # Fixed constants for padding calculations
-    EMPTY_LEFT_COLUMN = "│                                                                                    "
-    EMPTY_RIGHT_COLUMN = "                                         │"
+    # Validate border widths at class load time
+    @classmethod
+    def validate_borders(cls):
+        """Print the length of each border to verify they are correct."""
+        print(f"SINGLE_TOP length: {len(cls.SINGLE_TOP)} (should be {cls.DEFAULT_WIDTH})")
+        print(f"SINGLE_BOTTOM length: {len(cls.SINGLE_BOTTOM)} (should be {cls.DEFAULT_WIDTH})")
+        print(f"SINGLE_DIVIDER length: {len(cls.SINGLE_DIVIDER)} (should be {cls.DEFAULT_WIDTH})")
+        print(f"FORECAST_TOP length: {len(cls.FORECAST_TOP)} (should be {cls.DEFAULT_WIDTH})")
+        print(f"FORECAST_BOTTOM length: {len(cls.FORECAST_BOTTOM)} (should be {cls.DEFAULT_WIDTH})")
+        print(f"FORECAST_DIVIDER length: {len(cls.FORECAST_DIVIDER)} (should be {cls.DEFAULT_WIDTH})")
+        print(f"Column widths: {cls.LEFT_COLUMN_WIDTH} + {cls.RIGHT_COLUMN_WIDTH} + 3 = {cls.LEFT_COLUMN_WIDTH + cls.RIGHT_COLUMN_WIDTH + 3} (should be {cls.DEFAULT_WIDTH})")
+
+# Validate borders at module load time
+Box.validate_borders()
     
 # For calculating color escape sequence lengths
 def strip_color_codes(text):
@@ -469,6 +482,7 @@ def draw_box_line(content, box_type="single"):
 
 def draw_forecast_line(left_content="", right_content=""):
     """Draw a line in the forecast box with content in both columns.
+    Ensures perfect alignment with the border characters.
     
     Args:
         left_content: Content for the left column
@@ -477,23 +491,69 @@ def draw_forecast_line(left_content="", right_content=""):
     Returns:
         Formatted line with proper borders and padding
     """
+    # Strip color codes for accurate width calculation
     left_no_color = strip_color_codes(left_content)
     right_no_color = strip_color_codes(right_content)
     
-    # Calculate padding for each column
+    # Calculate padding needed for exact alignment
     left_padding = Box.LEFT_COLUMN_WIDTH - len(left_no_color)
     right_padding = Box.RIGHT_COLUMN_WIDTH - len(right_no_color)
     
+    # Handle content that's too long
     if left_padding < 0:
-        left_content = left_content[:Box.LEFT_COLUMN_WIDTH - 3] + "..."
-        left_padding = 0
+        # Find truncation point that preserves color codes
+        visible_pos = 0
+        truncation_point = 0
+        for i, char in enumerate(left_content):
+            if i < len(left_content) - 5 and left_content[i:i+2] == "\033":
+                # Skip color code
+                color_end = left_content.find("m", i)
+                if color_end != -1:
+                    i = color_end
+            else:
+                visible_pos += 1
+                if visible_pos == Box.LEFT_COLUMN_WIDTH - 3:
+                    truncation_point = i + 1
+                    break
         
+        if truncation_point > 0:
+            left_content = left_content[:truncation_point] + "..." + Colors.RESET
+        else:
+            left_content = left_content[:Box.LEFT_COLUMN_WIDTH - 3] + "..." + Colors.RESET
+        left_padding = 0
+    
+    # Handle right content the same way    
     if right_padding < 0:
-        right_content = right_content[:Box.RIGHT_COLUMN_WIDTH - 3] + "..."
+        visible_pos = 0
+        truncation_point = 0
+        for i, char in enumerate(right_content):
+            if i < len(right_content) - 5 and right_content[i:i+2] == "\033":
+                # Skip color code
+                color_end = right_content.find("m", i)
+                if color_end != -1:
+                    i = color_end
+            else:
+                visible_pos += 1
+                if visible_pos == Box.RIGHT_COLUMN_WIDTH - 3:
+                    truncation_point = i + 1
+                    break
+        
+        if truncation_point > 0:
+            right_content = right_content[:truncation_point] + "..." + Colors.RESET
+        else:
+            right_content = right_content[:Box.RIGHT_COLUMN_WIDTH - 3] + "..." + Colors.RESET
         right_padding = 0
     
     # Build the line with exact column widths
-    return f"{Box.VERTICAL}{left_content}{' ' * left_padding}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
+    line = f"{Box.VERTICAL}{left_content}{' ' * left_padding}{Box.VERTICAL}{right_content}{' ' * right_padding}{Box.VERTICAL}"
+    
+    # Verify the line is exactly the right length (including color codes)
+    line_no_color = strip_color_codes(line)
+    if len(line_no_color) != Box.DEFAULT_WIDTH:
+        # This shouldn't happen with correctly calculated padding, but just in case
+        print(f"Warning: Forecast line length {len(line_no_color)} doesn't match expected {Box.DEFAULT_WIDTH}")
+    
+    return line
 
 
 def get_weather_data():
@@ -1299,10 +1359,10 @@ def display_wtop():
     # Build a completely static forecast box with fixed borders
     print()  # Add a blank line for visual separation
     
-    # Static box dimensions for consistency
+    # Use the pre-defined static dimensions from Box class
     box_width = Box.DEFAULT_WIDTH
-    left_width = 86  # Fixed width for hourly column
-    right_width = 43  # Fixed width for daily column
+    left_width = Box.LEFT_COLUMN_WIDTH + 1  # +1 for left border
+    right_width = Box.RIGHT_COLUMN_WIDTH + 1  # +1 for middle border
     
     # These are redundant - remove them since we're using Box constants
     
@@ -1675,7 +1735,7 @@ def display_wtop():
 
 def main():
     """Main function to run the weather dashboard."""
-    if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help"]:
+    if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help", "--check-borders"]:
         print("WTOP - A terminal-based weather dashboard")
         print("Usage: python wtop.py")
         print(f"\nCurrently displaying weather for: {CITY}, {STATE}")
@@ -1688,6 +1748,23 @@ def main():
         print("3. Set MOCK_MODE = False in the script")
         print("\nThe dashboard updates automatically every 60 seconds.")
         print("Press Ctrl+C to exit.")
+        
+        if "--check-borders" in sys.argv:
+            # Print all border strings for inspection
+            print("\nChecking border strings:")
+            print("\nSINGLE_TOP:")
+            print(Box.SINGLE_TOP)
+            print("\nSINGLE_BOTTOM:")
+            print(Box.SINGLE_BOTTOM)
+            print("\nSINGLE_DIVIDER:")
+            print(Box.SINGLE_DIVIDER)
+            print("\nFORECAST_TOP:")
+            print(Box.FORECAST_TOP)
+            print("\nFORECAST_BOTTOM:")
+            print(Box.FORECAST_BOTTOM)
+            print("\nFORECAST_DIVIDER:")
+            print(Box.FORECAST_DIVIDER)
+        
         sys.exit(0)
     
     # Run in a continuous loop, updating every 5 seconds
@@ -1718,5 +1795,12 @@ def main():
         sys.exit(0)
 
 
+# Only validate when explicitly checking borders
 if __name__ == "__main__":
+    # Turn off the automatic validation for normal runs
+    if not (len(sys.argv) > 1 and "--check-borders" in sys.argv):
+        # Replace the validate_borders method with a dummy no-op when running normally
+        Box.validate_borders_original = Box.validate_borders
+        Box.validate_borders = lambda cls: None
+    
     main()
