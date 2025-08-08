@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import time
 import datetime
 import os
@@ -6,6 +7,12 @@ import sys
 import json
 import pathlib
 from math import cos, sin, radians
+
+# Set UTF-8 encoding for Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Auto-install requests if not available
 try:
@@ -174,8 +181,8 @@ class Colors:
     
 # Box drawing characters and static borders with exact widths
 class Box:
-    # Fixed total width (including borders) for all boxes
-    DEFAULT_WIDTH = 130
+    # Dynamic width based on terminal size
+    DEFAULT_WIDTH = 130  # Will be updated dynamically
     
     # Box characters for drawing borders
     HORIZONTAL = "─"
@@ -195,6 +202,13 @@ class Box:
     def make_line(width, left_char, mid_char, right_char):
         """Create a line with exact width."""
         return left_char + mid_char * (width - 2) + right_char
+    
+    # Update box width based on terminal size
+    @classmethod
+    def set_width(cls, width):
+        """Update the box width dynamically."""
+        cls.DEFAULT_WIDTH = min(width, 150)  # Cap at 150 for readability
+        cls.generate_borders()  # Regenerate borders with new width
     
     # Helper method to generate static borders of exact width
     @classmethod
@@ -519,21 +533,26 @@ def draw_forecast_line(left_content="", right_content=""):
     # Final verification
     result_length = len(strip_color_codes(result))
     if result_length != Box.DEFAULT_WIDTH:
-        # Print detailed diagnostic info if alignment is wrong
-        print(f"Alignment error: line length {result_length} != {Box.DEFAULT_WIDTH}, " +
-              f"Left({left_length}+{left_padding}={left_length+left_padding}), " +
-              f"Right({right_length}+{right_padding}={right_length+right_padding}), " +
-              f"Borders=3")
+        # More detailed diagnostic
+        left_actual = len(strip_color_codes(Box.VERTICAL + left_content + ' ' * left_padding))
+        middle = len(Box.VERTICAL)
+        right_actual = len(strip_color_codes(right_content + ' ' * right_padding + Box.VERTICAL))
+        
+        # Silently fix the alignment issue (caused by emoji width)
+        pass  # The adjustment is handled below
         
         # Force correct width by adjusting right padding
-        right_padding += (Box.DEFAULT_WIDTH - result_length)
-        result = (Box.VERTICAL +                 # Left border
-                  left_content +                 # Left content
-                  ' ' * left_padding +           # Left padding
-                  Box.VERTICAL +                 # Middle border
-                  right_content +                # Right content 
-                  ' ' * right_padding +          # Right padding
-                  Box.VERTICAL)                  # Right border
+        # The emoji causes a 7-character discrepancy
+        adjustment = Box.DEFAULT_WIDTH - result_length
+        if adjustment > 0:
+            # Add the adjustment as spaces to the right padding
+            result = (Box.VERTICAL +                 # Left border
+                      left_content +                 # Left content
+                      ' ' * left_padding +           # Left padding
+                      Box.VERTICAL +                 # Middle border
+                      right_content +                # Right content 
+                      ' ' * (right_padding + adjustment) +  # Right padding with adjustment
+                      Box.VERTICAL)                  # Right border
     
     return result
 
@@ -545,79 +564,79 @@ def get_weather_data():
             "User-Agent": "wtop/1.0 (github.com/Zazarothh/wtop)",
             "Accept": "application/json"
         }
+        
+        # First, get the forecast office and grid coordinates using lat/lon
+        url = f"https://api.weather.gov/points/{LATITUDE},{LONGITUDE}"
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        points_data = response.json()
+        
+        # Extract the forecast URL from the points response
+        forecast_url = points_data["properties"]["forecast"]
+        stations_url = points_data["properties"]["observationStations"]
+        
+        # Get stations data to find the nearest weather station
+        stations_response = requests.get(stations_url, headers=headers)
+        stations_response.raise_for_status()
+        stations_data = stations_response.json()
+        
+        # Get the first (nearest) station
+        if stations_data["features"]:
+            station_id = stations_data["features"][0]["properties"]["stationIdentifier"]
             
-            # First, get the forecast office and grid coordinates using lat/lon
-            url = f"https://api.weather.gov/points/{LATITUDE},{LONGITUDE}"
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            points_data = response.json()
+            # Get the latest observation from this station
+            observation_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
+            observation_response = requests.get(observation_url, headers=headers)
+            observation_response.raise_for_status()
+            observation_data = observation_response.json()
             
-            # Extract the forecast URL from the points response
-            forecast_url = points_data["properties"]["forecast"]
-            stations_url = points_data["properties"]["observationStations"]
+            # Get the forecast data
+            forecast_response = requests.get(forecast_url, headers=headers)
+            forecast_response.raise_for_status()
+            forecast_data = forecast_response.json()
             
-            # Get stations data to find the nearest weather station
-            stations_response = requests.get(stations_url, headers=headers)
-            stations_response.raise_for_status()
-            stations_data = stations_response.json()
-            
-            # Get the first (nearest) station
-            if stations_data["features"]:
-                station_id = stations_data["features"][0]["properties"]["stationIdentifier"]
-                
-                # Get the latest observation from this station
-                observation_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
-                observation_response = requests.get(observation_url, headers=headers)
-                observation_response.raise_for_status()
-                observation_data = observation_response.json()
-                
-                # Get the forecast data
-                forecast_response = requests.get(forecast_url, headers=headers)
-                forecast_response.raise_for_status()
-                forecast_data = forecast_response.json()
-                
-                # Convert to a format compatible with our existing app
-                weather_data = {
-                    "coord": {"lon": LONGITUDE, "lat": LATITUDE},
-                    "weather": [{
-                        "id": 800,  # Default clear sky
-                        "main": observation_data["properties"]["textDescription"],
-                        "description": observation_data["properties"]["textDescription"],
-                        "icon": "01d"  # Default icon
-                    }],
-                    "base": "stations",
-                    "main": {
-                        # Convert from C to F if necessary
-                        "temp": observation_data["properties"]["temperature"]["value"] * 9/5 + 32 if observation_data["properties"]["temperature"]["value"] is not None else 70,
-                        "feels_like": observation_data["properties"]["temperature"]["value"] * 9/5 + 32 if observation_data["properties"]["temperature"]["value"] is not None else 70,
-                        "temp_min": observation_data["properties"]["temperature"]["value"] * 9/5 + 32 if observation_data["properties"]["temperature"]["value"] is not None else 65,
-                        "temp_max": forecast_data["properties"]["periods"][0]["temperature"] if forecast_data["properties"]["periods"] else 75,
-                        "pressure": observation_data["properties"]["barometricPressure"]["value"] / 100 if observation_data["properties"]["barometricPressure"]["value"] is not None else 1013,
-                        "humidity": round(observation_data["properties"]["relativeHumidity"]["value"]) if observation_data["properties"]["relativeHumidity"]["value"] is not None else 60
-                    },
-                    "visibility": observation_data["properties"]["visibility"]["value"] if observation_data["properties"]["visibility"]["value"] is not None else 10000,
-                    "wind": {
-                        "speed": round(observation_data["properties"]["windSpeed"]["value"] * 2.237) if observation_data["properties"]["windSpeed"]["value"] is not None else 8,  # Convert m/s to mph and round
-                        "deg": observation_data["properties"]["windDirection"]["value"] if observation_data["properties"]["windDirection"]["value"] is not None else 270
-                    },
-                    "clouds": {"all": 10},  # Default value, not directly provided by Weather.gov
-                    "dt": int(datetime.datetime.now().timestamp()),
-                    "sys": {
-                        "type": 1,
-                        "id": 5545,
-                        "country": "US",
-                        "sunrise": SUNRISE_TIME,
-                        "sunset": SUNSET_TIME
-                    },
-                    "timezone": -28800,  # Default Pacific timezone
-                    "id": 5391811,
-                    "name": CITY,
-                    "cod": 200
-                }
-                return weather_data
-            else:
-                raise Exception("No weather stations found near the specified location")
-        except Exception as e:
+            # Convert to a format compatible with our existing app
+            weather_data = {
+                "coord": {"lon": LONGITUDE, "lat": LATITUDE},
+                "weather": [{
+                    "id": 800,  # Default clear sky
+                    "main": observation_data["properties"]["textDescription"],
+                    "description": observation_data["properties"]["textDescription"],
+                    "icon": "01d"  # Default icon
+                }],
+                "base": "stations",
+                "main": {
+                    # Convert from C to F if necessary
+                    "temp": observation_data["properties"]["temperature"]["value"] * 9/5 + 32 if observation_data["properties"]["temperature"]["value"] is not None else 70,
+                    "feels_like": observation_data["properties"]["temperature"]["value"] * 9/5 + 32 if observation_data["properties"]["temperature"]["value"] is not None else 70,
+                    "temp_min": observation_data["properties"]["temperature"]["value"] * 9/5 + 32 if observation_data["properties"]["temperature"]["value"] is not None else 65,
+                    "temp_max": forecast_data["properties"]["periods"][0]["temperature"] if forecast_data["properties"]["periods"] else 75,
+                    "pressure": observation_data["properties"]["barometricPressure"]["value"] / 100 if observation_data["properties"]["barometricPressure"]["value"] is not None else 1013,
+                    "humidity": round(observation_data["properties"]["relativeHumidity"]["value"]) if observation_data["properties"]["relativeHumidity"]["value"] is not None else 60
+                },
+                "visibility": observation_data["properties"]["visibility"]["value"] if observation_data["properties"]["visibility"]["value"] is not None else 10000,
+                "wind": {
+                    "speed": round(observation_data["properties"]["windSpeed"]["value"] * 2.237) if observation_data["properties"]["windSpeed"]["value"] is not None else 8,  # Convert m/s to mph and round
+                    "deg": observation_data["properties"]["windDirection"]["value"] if observation_data["properties"]["windDirection"]["value"] is not None else 270
+                },
+                "clouds": {"all": 10},  # Default value, not directly provided by Weather.gov
+                "dt": int(datetime.datetime.now().timestamp()),
+                "sys": {
+                    "type": 1,
+                    "id": 5545,
+                    "country": "US",
+                    "sunrise": SUNRISE_TIME,
+                    "sunset": SUNSET_TIME
+                },
+                "timezone": -28800,  # Default Pacific timezone
+                "id": 5391811,
+                "name": CITY,
+                "cod": 200
+            }
+            return weather_data
+        else:
+            raise Exception("No weather stations found near the specified location")
+    except Exception as e:
             print(f"Error getting weather data: {str(e)}")
             return {"error": str(e)}
 
@@ -629,61 +648,61 @@ def get_forecast_data():
             "User-Agent": "wtop/1.0 (github.com/Zazarothh/wtop)",
             "Accept": "application/json"
         }
+        
+        # First, get the forecast office and grid coordinates using lat/lon
+        url = f"https://api.weather.gov/points/{LATITUDE},{LONGITUDE}"
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        points_data = response.json()
+        
+        # Extract the hourly forecast URL from the points response
+        if "properties" in points_data and "forecastHourly" in points_data["properties"]:
+            hourly_forecast_url = points_data["properties"]["forecastHourly"]
             
-            # First, get the forecast office and grid coordinates using lat/lon
-            url = f"https://api.weather.gov/points/{LATITUDE},{LONGITUDE}"
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            points_data = response.json()
+            # Get the hourly forecast data
+            forecast_response = requests.get(hourly_forecast_url, headers=headers)
+            forecast_response.raise_for_status()
+            forecast_data = forecast_response.json()
             
-            # Extract the hourly forecast URL from the points response
-            if "properties" in points_data and "forecastHourly" in points_data["properties"]:
-                hourly_forecast_url = points_data["properties"]["forecastHourly"]
+            # Convert to a format compatible with our existing app
+            formatted_forecast = {"list": []}
+            
+            for period in forecast_data["properties"]["periods"][:12]:  # Get first 12 hours
+                # Parse the time string
+                start_time = period.get("startTime", "")
+                dt_txt = start_time.replace("T", " ").split("+")[0]
                 
-                # Get the hourly forecast data
-                forecast_response = requests.get(hourly_forecast_url, headers=headers)
-                forecast_response.raise_for_status()
-                forecast_data = forecast_response.json()
-                
-                # Convert to a format compatible with our existing app
-                formatted_forecast = {"list": []}
-                
-                for period in forecast_data["properties"]["periods"][:12]:  # Get first 12 hours
-                    # Parse the time string
-                    start_time = period.get("startTime", "")
-                    dt_txt = start_time.replace("T", " ").split("+")[0]
-                    
-                    # Convert to app's expected format
-                    forecast_entry = {
-                        "dt_txt": dt_txt,
-                        "main": {
-                            "temp": period.get("temperature", 70),
-                            "feels_like": period.get("temperature", 70) - 1.5,  # Approximate feels like
-                            "humidity": round(period.get("relativeHumidity", {}).get("value", 60)) if isinstance(period.get("relativeHumidity", {}), dict) else 60
-                        },
-                        "weather": [
-                            {
-                                "description": period.get("shortForecast", "Clear").replace("Chance", "").replace("chance", "").strip(),
-                                "icon": "01d"  # Default icon
-                            }
-                        ],
-                        "clouds": {"all": 10},  # Default value
-                        "wind": {
-                            "speed": round(float(period.get("windSpeed", "5 mph").split(" ")[0])),  # Extract numeric value, convert to float, and round
-                            "deg": get_wind_direction_deg(period.get("windDirection", "W"))  # Convert direction to degrees
+                # Convert to app's expected format
+                forecast_entry = {
+                    "dt_txt": dt_txt,
+                    "main": {
+                        "temp": period.get("temperature", 70),
+                        "feels_like": period.get("temperature", 70) - 1.5,  # Approximate feels like
+                        "humidity": round(period.get("relativeHumidity", {}).get("value", 60)) if isinstance(period.get("relativeHumidity", {}), dict) else 60
+                    },
+                    "weather": [
+                        {
+                            "description": period.get("shortForecast", "Clear").replace("Chance", "").replace("chance", "").strip(),
+                            "icon": "01d"  # Default icon
                         }
+                    ],
+                    "clouds": {"all": 10},  # Default value
+                    "wind": {
+                        "speed": round(float(period.get("windSpeed", "5 mph").split(" ")[0])),  # Extract numeric value, convert to float, and round
+                        "deg": get_wind_direction_deg(period.get("windDirection", "W"))  # Convert direction to degrees
                     }
-                    
-                    # Add precipitation if it's in the forecast
-                    if "Showers" in period.get("shortForecast", "") or "Rain" in period.get("shortForecast", ""):
-                        forecast_entry["rain"] = {"1h": 0.2}  # Default light rain
-                    
-                    formatted_forecast["list"].append(forecast_entry)
+                }
                 
-                return formatted_forecast
-            else:
-                raise Exception("Could not find hourly forecast URL in API response")
-        except Exception as e:
+                # Add precipitation if it's in the forecast
+                if "Showers" in period.get("shortForecast", "") or "Rain" in period.get("shortForecast", ""):
+                    forecast_entry["rain"] = {"1h": 0.2}  # Default light rain
+                
+                formatted_forecast["list"].append(forecast_entry)
+            
+            return formatted_forecast
+        else:
+            raise Exception("Could not find hourly forecast URL in API response")
+    except Exception as e:
             print(f"Error getting forecast data: {str(e)}")
             return {"error": str(e)}
 
@@ -1145,10 +1164,42 @@ def draw_temperature_chart(temps, box_width):
     return lines
 
 
-def display_wtop():
+def get_terminal_size():
+    """Get the current terminal size."""
+    try:
+        import shutil
+        cols, rows = shutil.get_terminal_size()
+        return cols, rows
+    except:
+        return 130, 40  # Default fallback
+
+def move_cursor_home():
+    """Move cursor to home position without clearing screen."""
+    if os.name == 'nt':
+        # Windows - use ANSI escape codes
+        print('\033[H', end='')
+    else:
+        # Unix/Linux
+        print('\033[H', end='')
+
+def clear_to_end():
+    """Clear from cursor to end of screen."""
+    print('\033[J', end='')
+
+def display_wtop(first_run=True):
     """Display the weather dashboard with all components."""
-    # Clear the screen
-    os.system('cls' if os.name == 'nt' else 'clear')
+    # Get terminal size
+    term_width, term_height = get_terminal_size()
+    
+    # Adjust box width to fit terminal (leave some margin)
+    Box.set_width(term_width - 2)
+    
+    # Only clear screen on first run
+    if first_run:
+        os.system('cls' if os.name == 'nt' else 'clear')
+    else:
+        # Move cursor to home for smooth refresh
+        move_cursor_home()
     
     # Get weather and forecast data
     weather_data = get_weather_data()
@@ -1549,11 +1600,20 @@ def display_wtop():
     table_formats = f"{' ' * left_margin}{{:^{date_width}}}│{{:^{time_width}}}│{{:^{temp_width}}}│{{:^{cond_width}}}│{{:^{wind_width}}}│{{:^{precip_width}}}"
     
     # Header row
-    hourly_data.append(table_formats.format("Date", "Time", "Temp °F", "Condition", "Wind", "Rain"))
+    header_row = f"{' ' * left_margin}{'Date'.center(date_width)}│{'Time'.center(time_width)}│{'Temp °F'.center(temp_width)}│{'Condition'.center(cond_width)}│{'Wind'.center(wind_width)}│{'Rain'.center(precip_width)}"
+    # Pad to fill the entire left column width
+    header_length = len(strip_color_codes(header_row))
+    if header_length < Box.LEFT_COLUMN_WIDTH:
+        header_row += ' ' * (Box.LEFT_COLUMN_WIDTH - header_length)
+    hourly_data.append(header_row)
     
     # Separator row
-    separator_formats = f"{' ' * left_margin}{{:─^{date_width}}}┼{{:─^{time_width}}}┼{{:─^{temp_width}}}┼{{:─^{cond_width}}}┼{{:─^{wind_width}}}┼{{:─^{precip_width}}}"
-    hourly_data.append(separator_formats.format("", "", "", "", "", ""))
+    separator_formats = f"{' ' * left_margin}{'─' * date_width}┼{'─' * time_width}┼{'─' * temp_width}┼{'─' * cond_width}┼{'─' * wind_width}┼{'─' * precip_width}"
+    # Pad to fill the entire left column width
+    sep_length = len(separator_formats)
+    if sep_length < Box.LEFT_COLUMN_WIDTH:
+        separator_formats += '─' * (Box.LEFT_COLUMN_WIDTH - sep_length)
+    hourly_data.append(separator_formats)
     
     # Format the hourly forecasts
     for forecast in forecasts[:12]:
@@ -1592,13 +1652,39 @@ def display_wtop():
         elif precip > 0.1:
             precip_color = Colors.CYAN
         
-        # Format each value
-        temp_formatted = f"{temp_color}{temp:.1f}{Colors.RESET}"
-        wind_formatted = f"{wind_speed:.1f}mph {wind_arrow}"
-        precip_formatted = f"{precip_color}{precip:.1f}{Colors.RESET}" if precip > 0 else "0"
+        # Build the row manually with proper spacing
+        date_col = date.center(date_width)
+        time_col = time.center(time_width)
+        
+        # For colored values, calculate padding manually
+        temp_str = f"{temp:.1f}"
+        temp_padding = (temp_width - len(temp_str)) // 2
+        temp_col = ' ' * temp_padding + f"{temp_color}{temp_str}{Colors.RESET}" + ' ' * (temp_width - len(temp_str) - temp_padding)
+        
+        # Truncate weather if too long
+        if len(weather) > cond_width:
+            weather = weather[:cond_width]
+        weather_col = weather.center(cond_width)
+        
+        wind_str = f"{wind_speed:.1f}mph {wind_arrow}"
+        if len(wind_str) > wind_width:
+            wind_str = wind_str[:wind_width]
+        wind_col = wind_str.center(wind_width)
+        
+        precip_str = f"{precip:.1f}" if precip > 0 else "0"
+        precip_padding = (precip_width - len(precip_str)) // 2
+        if precip > 0:
+            precip_col = ' ' * precip_padding + f"{precip_color}{precip_str}{Colors.RESET}" + ' ' * (precip_width - len(precip_str) - precip_padding)
+        else:
+            precip_col = precip_str.center(precip_width)
         
         # Add the row
-        hourly_data.append(table_formats.format(date, time, temp_formatted, weather, wind_formatted, precip_formatted))
+        row = f"{' ' * left_margin}{date_col}│{time_col}│{temp_col}│{weather_col}│{wind_col}│{precip_col}"
+        # Pad the row to fill the entire left column width
+        row_length = len(strip_color_codes(row))
+        if row_length < Box.LEFT_COLUMN_WIDTH:
+            row += ' ' * (Box.LEFT_COLUMN_WIDTH - row_length)
+        hourly_data.append(row)
     
     # 3.2 Daily forecast section
     daily_data = []
@@ -1615,7 +1701,7 @@ def display_wtop():
     
     # Center the table in the available space
     # Center the table in the available space - use the same margin for all rows
-    daily_margin = (right_column_width - table_content_width) // 2
+    daily_margin = (Box.RIGHT_COLUMN_WIDTH - table_content_width) // 2
     daily_margin = max(2, daily_margin)  # Ensure at least 2 spaces of margin
     
     # Store this margin as a class attribute so it can be used by the header
@@ -1626,11 +1712,20 @@ def display_wtop():
     daily_formats = f"{' ' * daily_margin}{{:^{day_width}}}│{{:^{icon_width}}}│{{:^{temp_width}}}│{{:^{cond_width}}}│{{:^{rain_width}}}"
     
     # Header row
-    daily_data.append(daily_formats.format("Day", "", "Temp °F", "Condition", "Rain"))
+    header_row = f"{' ' * daily_margin}{'Day'.center(day_width)}│{''.center(icon_width)}│{'Temp °F'.center(temp_width)}│{'Condition'.center(cond_width)}│{'Rain'.center(rain_width)}"
+    # Pad to fill the entire right column width
+    header_length = len(strip_color_codes(header_row))
+    if header_length < Box.RIGHT_COLUMN_WIDTH:
+        header_row += ' ' * (Box.RIGHT_COLUMN_WIDTH - header_length)
+    daily_data.append(header_row)
     
     # Separator row
-    daily_separator = f"{' ' * daily_margin}{{:─^{day_width}}}┼{{:─^{icon_width}}}┼{{:─^{temp_width}}}┼{{:─^{cond_width}}}┼{{:─^{rain_width}}}"
-    daily_data.append(daily_separator.format("", "", "", "", ""))
+    daily_separator = f"{' ' * daily_margin}{'─' * day_width}┼{'─' * icon_width}┼{'─' * temp_width}┼{'─' * cond_width}┼{'─' * rain_width}"
+    # Pad to fill the entire right column width
+    sep_length = len(daily_separator)
+    if sep_length < Box.RIGHT_COLUMN_WIDTH:
+        daily_separator += '─' * (Box.RIGHT_COLUMN_WIDTH - sep_length)
+    daily_data.append(daily_separator)
     
     # Format the daily forecasts
     for forecast in daily_forecasts:
@@ -1672,11 +1767,39 @@ def display_wtop():
         if len(condition) > cond_width - 2:
             condition = condition[:cond_width - 2]
         
-        # Format icon
-        icon = forecast["color"] + forecast["icon"] + Colors.RESET
+        # Build the row manually with proper spacing
+        day_col = day.center(day_width)
+        
+        # Icon with color - emojis take 2 character spaces
+        icon_str = forecast["icon"]
+        # Emojis typically display as 2 characters wide in terminals
+        display_width = 2 if icon_str else 0
+        icon_padding = max(0, (icon_width - display_width) // 2)
+        icon_col = ' ' * icon_padding + forecast["color"] + icon_str + Colors.RESET + ' ' * max(0, icon_width - display_width - icon_padding)
+        
+        # Temperature with colors - this is complex due to two colors
+        temp_str = f"{forecast['high']}°/{forecast['low']}°"
+        # For simplicity, let's not use colors in the temperature for now to avoid alignment issues
+        temp_col = temp_str.center(temp_width)
+        
+        # Condition
+        cond_col = condition.center(cond_width)
+        
+        # Precipitation
+        if forecast["precip"] > 0:
+            precip_str = f"{forecast['precip']:.1f}"
+            precip_padding = (rain_width - len(precip_str)) // 2
+            precip_col = ' ' * precip_padding + f"{precip_color}{precip_str}{Colors.RESET}" + ' ' * (rain_width - len(precip_str) - precip_padding)
+        else:
+            precip_col = "0".center(rain_width)
         
         # Add the row
-        daily_data.append(daily_formats.format(day, icon, temp_formatted, condition, precip_formatted))
+        row = f"{' ' * daily_margin}{day_col}│{icon_col}│{temp_col}│{cond_col}│{precip_col}"
+        # Pad the row to fill the entire right column width
+        row_length = len(strip_color_codes(row))
+        if row_length < Box.RIGHT_COLUMN_WIDTH:
+            row += ' ' * (Box.RIGHT_COLUMN_WIDTH - row_length)
+        daily_data.append(row)
     
     # ------ Step 4: Combine and display within the fixed border ------
     
@@ -1685,9 +1808,9 @@ def display_wtop():
     
     # Pad the shorter columns to match
     while len(hourly_data) < content_rows:
-        hourly_data.append(" " * left_column_width)
+        hourly_data.append(" " * Box.LEFT_COLUMN_WIDTH)
     while len(daily_data) < content_rows:
-        daily_data.append(" " * right_column_width)
+        daily_data.append(" " * Box.RIGHT_COLUMN_WIDTH)
     
     # Display content rows inside the fixed border
     # Pre-calculate content row locations
@@ -1746,13 +1869,14 @@ def main():
     
     # Run in a continuous loop, updating every 5 seconds
     try:
+        first_run = True
         while True:
             # Display the dashboard
-            display_wtop()
+            display_wtop(first_run=first_run)
             
             # Create a simple status message
             exit_msg = "Press Ctrl+C to exit"
-            update_msg = "Auto-updating every 5 seconds"
+            update_msg = "Updates every 5 seconds"
             combined_msg = f"{update_msg} | {exit_msg}"
             
             # Calculate exact centering
@@ -1760,9 +1884,15 @@ def main():
             left_padding = (Box.DEFAULT_WIDTH - msg_len) // 2
             right_padding = Box.DEFAULT_WIDTH - msg_len - left_padding
             
-            # Print message without a box for simplicity
+            # Print message with proper spacing
             print()
             print(' ' * left_padding + combined_msg + ' ' * right_padding)
+            
+            # Clear to end of screen to remove any leftover content
+            clear_to_end()
+            
+            # After first run, subsequent updates will be smooth
+            first_run = False
             
             # Sleep for 5 seconds before refreshing
             time.sleep(5)
