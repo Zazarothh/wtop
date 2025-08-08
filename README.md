@@ -43,7 +43,7 @@ A beautiful, responsive terminal-based weather dashboard that displays real-time
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/wtop.git
+git clone https://github.com/Zazarothh/wtop.git
 cd wtop
 ```
 
