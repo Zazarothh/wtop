@@ -37,6 +37,12 @@ jobs:
       run: |
         pyinstaller --onefile --name wtop wtop.py
     
+    - name: Upload artifact for signing
+      uses: actions/upload-artifact@v3
+      with:
+        name: wtop-unsigned
+        path: dist/wtop.exe
+    
     - name: Get version
       id: get_version
       run: |
@@ -56,16 +62,26 @@ jobs:
         organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
         project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
         signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
-        artifact-path: dist/wtop.exe
+        github-artifact-name: wtop-unsigned
         wait-for-completion: true
-        output-artifact-path: dist/wtop-signed.exe
+        output-artifact-directory: signed
       continue-on-error: true
     
-    - name: Rename signed executable
+    - name: Download signed artifact
       if: success()
+      uses: actions/download-artifact@v3
+      with:
+        name: wtop-unsigned
+        path: signed
+      continue-on-error: true
+    
+    - name: Use signed executable if available
       run: |
-        if (Test-Path "dist/wtop-signed.exe") {
-          Move-Item -Force "dist/wtop-signed.exe" "dist/wtop.exe"
+        if (Test-Path "signed/wtop.exe") {
+          Write-Host "Using signed executable"
+          Copy-Item -Force "signed/wtop.exe" "dist/wtop.exe"
+        } else {
+          Write-Host "Using unsigned executable"
         }
     
     - name: Create release assets
