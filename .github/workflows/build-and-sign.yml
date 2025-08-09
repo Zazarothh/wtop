@@ -17,6 +17,7 @@ permissions:
 jobs:
   build-and-sign:
     runs-on: windows-latest
+    environment: SignPath
     
     steps:
     - name: Checkout code
@@ -49,9 +50,7 @@ jobs:
     
     # SignPath signing (only if secrets are configured)
     - name: Sign executable with SignPath
-      if: env.SIGNPATH_API_TOKEN != ''
-      env:
-        SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
       uses: signpath/github-action-submit-signing-request@v0.3
       with:
         api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -63,9 +62,7 @@ jobs:
         output-artifact-path: dist/wtop-signed.exe
     
     - name: Rename signed executable
-      if: env.SIGNPATH_API_TOKEN != ''
-      env:
-        SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
       run: |
         if (Test-Path "dist/wtop-signed.exe") {
           Move-Item -Force "dist/wtop-signed.exe" "dist/wtop.exe"
