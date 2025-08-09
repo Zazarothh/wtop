@@ -50,7 +50,6 @@ jobs:
     
     # SignPath signing (only if secrets are configured)
     - name: Sign executable with SignPath
-      if: secrets.SIGNPATH_API_TOKEN != ''
       uses: signpath/github-action-submit-signing-request@v0.3
       with:
         api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -60,9 +59,10 @@ jobs:
         artifact-path: dist/wtop.exe
         wait-for-completion: true
         output-artifact-path: dist/wtop-signed.exe
+      continue-on-error: true
     
     - name: Rename signed executable
-      if: secrets.SIGNPATH_API_TOKEN != ''
+      if: success()
       run: |
         if (Test-Path "dist/wtop-signed.exe") {
           Move-Item -Force "dist/wtop-signed.exe" "dist/wtop.exe"
