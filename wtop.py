@@ -206,8 +206,9 @@ class Box:
         cls.SINGLE_DIVIDER = cls.make_line(cls.DEFAULT_WIDTH, cls.LEFT_T, cls.HORIZONTAL, cls.RIGHT_T)
         
         # Calculate split position for two-column layout
-        # This is fixed at character 94 (measured manually for precise alignment)
-        cls.SPLIT_POSITION = 94
+        # Use a 60/40 split for hourly (left) and daily (right) forecast
+        # This gives more room to the hourly forecast which has more columns
+        cls.SPLIT_POSITION = int(cls.DEFAULT_WIDTH * 0.6)
         
         # Create split borders with T-junctions
         # Left section
@@ -327,7 +328,10 @@ def draw_hourly_forecast_table(forecasts):
     for forecast in forecasts[:12]:
         # Extract data
         dt_txt = forecast.get("dt_txt", "")
-        date = dt_txt.split(" ")[0].split("-")[2] + "/" + dt_txt.split(" ")[0].split("-")[1]  # Display as DD/MM
+        # Format date as M/D (no zero padding)
+        month = int(dt_txt.split(" ")[0].split("-")[1])
+        day = int(dt_txt.split(" ")[0].split("-")[2])
+        date = f"{month}/{day}"
         time = dt_txt.split(" ")[1][:5]  # HH:MM
         
         temp = forecast.get("main", {}).get("temp", 0)
@@ -452,55 +456,14 @@ def draw_forecast_line(left_content="", right_content=""):
     
     # Truncate content if too long (preserving color codes)
     if left_length > max_left_length:
-        # We need to truncate at the right position accounting for color codes
-        visible_count = 0
-        final_pos = 0
-        
-        for i, char in enumerate(left_content):
-            if char == '\033':  # ANSI escape sequence start
-                # Skip this entire color code
-                color_end = left_content.find('m', i)
-                if color_end != -1:
-                    continue
-            else:
-                visible_count += 1
-                if visible_count == max_left_length - 3:  # -3 for '...'
-                    final_pos = i + 1
-                    break
-        
-        # If we found a valid truncation point
-        if final_pos > 0:
-            left_content = left_content[:final_pos] + "..." + Colors.RESET
-        else:
-            # Fallback to a simple truncation (may break color codes)
-            left_content = left_content[:max_left_length - 3] + "..." + Colors.RESET
-        
+        # Simple truncation based on visual length
+        left_content = left_content[:max_left_length - 3] + "..."
         left_length = max_left_length  # Now we're exactly at the maximum
     
     # Same truncation logic for right column
     if right_length > max_right_length:
-        visible_count = 0
-        final_pos = 0
-        
-        for i, char in enumerate(right_content):
-            if char == '\033':  # ANSI escape sequence start
-                # Skip this entire color code
-                color_end = right_content.find('m', i)
-                if color_end != -1:
-                    continue
-            else:
-                visible_count += 1
-                if visible_count == max_right_length - 3:  # -3 for '...'
-                    final_pos = i + 1
-                    break
-        
-        # If we found a valid truncation point
-        if final_pos > 0:
-            right_content = right_content[:final_pos] + "..." + Colors.RESET
-        else:
-            # Fallback to a simple truncation (may break color codes)
-            right_content = right_content[:max_right_length - 3] + "..." + Colors.RESET
-        
+        # Simple truncation based on visual length
+        right_content = right_content[:max_right_length - 3] + "..."
         right_length = max_right_length  # Now we're exactly at the maximum
     
     # Calculate padding to fill each column exactly
@@ -1575,18 +1538,23 @@ def display_wtop(first_run=True):
     hourly_data = []
     
     # Create hourly header
-    date_width = 6      # Date column width
-    time_width = 6      # Time column width
-    temp_width = 8      # Temperature column width
-    cond_width = 12     # Weather condition column width
-    wind_width = 10     # Wind information column width
-    precip_width = 5    # Precipitation column width
+    # Total available width is about 47 characters (SPLIT_POSITION - 1)
+    # Need to fit: Date | Time | Temp | Condition | Wind | Rain
+    # Plus 5 separators (│) = 5 chars
+    # Plus 2 margin = 2 chars
+    # So we have about 40 chars for actual content
+    date_width = 5      # Date column width (MM/DD)
+    time_width = 5      # Time column width (HH:MM)
+    temp_width = 6      # Temperature column width
+    cond_width = 10     # Weather condition column width (shorter)
+    wind_width = 8      # Wind information column width (shorter)
+    precip_width = 4    # Precipitation column width
     
     left_margin = 2
     table_formats = f"{' ' * left_margin}{{:^{date_width}}}│{{:^{time_width}}}│{{:^{temp_width}}}│{{:^{cond_width}}}│{{:^{wind_width}}}│{{:^{precip_width}}}"
     
     # Header row
-    header_row = f"{' ' * left_margin}{'Date'.center(date_width)}│{'Time'.center(time_width)}│{'Temp °F'.center(temp_width)}│{'Condition'.center(cond_width)}│{'Wind'.center(wind_width)}│{'Rain'.center(precip_width)}"
+    header_row = f"{' ' * left_margin}{'Date'.center(date_width)}│{'Time'.center(time_width)}│{'Temp'.center(temp_width)}│{'Condition'.center(cond_width)}│{'Wind'.center(wind_width)}│{'Rain'.center(precip_width)}"
     # Pad to fill the entire left column width
     header_length = len(strip_color_codes(header_row))
     if header_length < Box.LEFT_COLUMN_WIDTH:
@@ -1604,7 +1572,10 @@ def display_wtop(first_run=True):
     # Format the hourly forecasts
     for forecast in forecasts[:12]:
         dt_txt = forecast.get("dt_txt", "")
-        date = dt_txt.split(" ")[0].split("-")[2] + "/" + dt_txt.split(" ")[0].split("-")[1]  # Display as DD/MM
+        # Format date as M/D (no zero padding)
+        month = int(dt_txt.split(" ")[0].split("-")[1])
+        day = int(dt_txt.split(" ")[0].split("-")[2])
+        date = f"{month}/{day}"
         time = dt_txt.split(" ")[1][:5]  # HH:MM
         
         temp = forecast.get("main", {}).get("temp", 0)
@@ -1652,7 +1623,8 @@ def display_wtop(first_run=True):
             weather = weather[:cond_width]
         weather_col = weather.center(cond_width)
         
-        wind_str = f"{wind_speed:.1f}mph {wind_arrow}"
+        # Make wind display more compact
+        wind_str = f"{wind_speed:.0f}mph{wind_arrow}"
         if len(wind_str) > wind_width:
             wind_str = wind_str[:wind_width]
         wind_col = wind_str.center(wind_width)
@@ -1706,11 +1678,8 @@ def display_wtop(first_run=True):
     # This is used for the "7-Day Forecast" header centering
     Box.daily_table_margin = daily_margin
     
-    # Format string with centered columns
-    daily_formats = f"{' ' * daily_margin}{{:^{day_width}}}│{{:^{icon_width}}}│{{:^{temp_width}}}│{{:^{cond_width}}}│{{:^{rain_width}}}"
-    
-    # Header row
-    header_row = f"{' ' * daily_margin}{'Day'.center(day_width)}│{''.center(icon_width)}│{'Temp °F'.center(temp_width)}│{'Condition'.center(cond_width)}│{'Rain'.center(rain_width)}"
+    # Header row with better labels
+    header_row = f"{' ' * daily_margin}{'Day'.center(day_width)}│{' ' * icon_width}│{'Hi/Lo'.center(temp_width)}│{'Weather'.center(cond_width)}│{'Rain'.center(rain_width)}"
     # Pad to fill the entire right column width
     header_length = len(strip_color_codes(header_row))
     if header_length < Box.RIGHT_COLUMN_WIDTH:
@@ -1729,7 +1698,7 @@ def display_wtop(first_run=True):
     for forecast in daily_forecasts:
         day = forecast['day'][:3]
         
-        # Format temperature with color
+        # Format temperature with proper colors
         if forecast["high"] > 85:
             high_color = Colors.RED
         elif forecast["high"] > 75:
@@ -1748,46 +1717,59 @@ def display_wtop(first_run=True):
         else:
             low_color = Colors.CYAN
         
-        temp_formatted = f"{high_color}{forecast['high']}°{Colors.RESET}/{low_color}{forecast['low']}°{Colors.RESET}"
+        # Format condition - smart truncation
+        condition = forecast["condition"]
+        if len(condition) > cond_width:
+            condition = condition[:cond_width-3] + ".."  # Add ellipsis for truncated text
         
-        # Format precipitation
+        # Build the row with simplified formatting
+        day_col = day.center(day_width)
+        
+        # Simplified icon column - just the emoji with proper padding
+        # Don't add Colors.RESET here - let it be added with padding
+        icon_display = forecast["color"] + forecast["icon"]
+        icon_col_display_len = 2  # Emoji width
+        # Add padding and RESET at the end
+        if icon_width > icon_col_display_len:
+            padding = ' ' * (icon_width - icon_col_display_len)
+            icon_col = icon_display + Colors.RESET + padding
+        else:
+            icon_col = icon_display + Colors.RESET
+        
+        # Temperature with colors properly formatted
+        high_str = f"{forecast['high']}°"
+        low_str = f"{forecast['low']}°"
+        # Build temp column with colors
+        temp_col = f"{high_color}{high_str}{Colors.RESET}/{low_color}{low_str}{Colors.RESET}"
+        # Center the temperature display accounting for color codes
+        temp_display_len = len(f"{high_str}/{low_str}")
+        if temp_width > temp_display_len:
+            padding_needed = temp_width - temp_display_len
+            left_pad = padding_needed // 2
+            right_pad = padding_needed - left_pad
+            temp_col = ' ' * left_pad + temp_col + ' ' * right_pad
+        
+        # Condition - properly centered
+        cond_col = condition.center(cond_width)
+        
+        # Precipitation with color
         if forecast["precip"] > 0.4:
             precip_color = Colors.BLUE
         elif forecast["precip"] > 0:
             precip_color = Colors.CYAN
         else:
-            precip_color = Colors.RESET
+            precip_color = ""
         
-        precip_formatted = f"{precip_color}{forecast['precip']:.1f}{Colors.RESET}" if forecast["precip"] > 0 else "0"
-        
-        # Format condition - truncate if too long for the column
-        condition = forecast["condition"]
-        if len(condition) > cond_width:
-            condition = condition[:cond_width-1]  # Truncate to fit
-        
-        # Build the row manually with proper spacing
-        day_col = day.center(day_width)
-        
-        # Icon with color - emojis take 2 character spaces
-        icon_str = forecast["icon"]
-        # Emojis typically display as 2 characters wide in terminals
-        display_width = 2 if icon_str else 0
-        icon_padding = max(0, (icon_width - display_width) // 2)
-        icon_col = ' ' * icon_padding + forecast["color"] + icon_str + Colors.RESET + ' ' * max(0, icon_width - display_width - icon_padding)
-        
-        # Temperature with colors - this is complex due to two colors
-        temp_str = f"{forecast['high']}°/{forecast['low']}°"
-        # For simplicity, let's not use colors in the temperature for now to avoid alignment issues
-        temp_col = temp_str.center(temp_width)
-        
-        # Condition
-        cond_col = condition.center(cond_width)
-        
-        # Precipitation
         if forecast["precip"] > 0:
             precip_str = f"{forecast['precip']:.1f}"
-            precip_padding = (rain_width - len(precip_str)) // 2
-            precip_col = ' ' * precip_padding + f"{precip_color}{precip_str}{Colors.RESET}" + ' ' * (rain_width - len(precip_str) - precip_padding)
+            precip_col = f"{precip_color}{precip_str}{Colors.RESET}"
+            # Center it
+            precip_display_len = len(precip_str)
+            if rain_width > precip_display_len:
+                padding_needed = rain_width - precip_display_len
+                left_pad = padding_needed // 2
+                right_pad = padding_needed - left_pad
+                precip_col = ' ' * left_pad + precip_col + ' ' * right_pad
         else:
             precip_col = "0".center(rain_width)
         
