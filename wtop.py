@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import pathlib
+import signal
 from math import cos, sin, radians
 
 # Set UTF-8 encoding for Windows
@@ -1160,12 +1161,7 @@ def get_terminal_size():
 
 def move_cursor_home():
     """Move cursor to home position without clearing screen."""
-    if os.name == 'nt':
-        # Windows - use ANSI escape codes
-        print('\033[H', end='')
-    else:
-        # Unix/Linux
-        print('\033[H', end='')
+    print('\033[H', end='', flush=True)
 
 def clear_to_end():
     """Clear from cursor to end of screen."""
@@ -1176,12 +1172,21 @@ def display_wtop(first_run=True):
     # Get terminal size
     term_width, term_height = get_terminal_size()
     
+    # Minimum terminal size check
+    min_width = 80
+    min_height = 24
+    if term_width < min_width or term_height < min_height:
+        print(f"\033[2J\033[H")  # Clear screen and move to home
+        print(f"Terminal too small! Minimum size: {min_width}x{min_height}")
+        print(f"Current size: {term_width}x{term_height}")
+        return
+    
     # Adjust box width to fit terminal (leave some margin)
-    Box.set_width(term_width - 2)
+    Box.set_width(min(term_width - 2, 130))  # Cap at 130 for readability
     
     # Only clear screen on first run
     if first_run:
-        os.system('cls' if os.name == 'nt' else 'clear')
+        print("\033[2J\033[H", end='')  # ANSI clear screen and home
     else:
         # Move cursor to home for smooth refresh
         move_cursor_home()
@@ -1366,10 +1371,6 @@ def display_wtop(first_run=True):
     
     # Close the current conditions box
     print(Box.SINGLE_BOTTOM)
-    print()  # Add a blank line for visual separation
-        
-    # Build a completely static forecast box with fixed borders
-    print()  # Add a blank line for visual separation
     
     # No need to recalculate dimensions - they're all defined in the Box class
     # This ensures perfect alignment of all borders
@@ -1392,10 +1393,10 @@ def display_wtop(first_run=True):
     left_header = f"{Colors.BOLD}Hourly Forecast (Next 12 Hours){Colors.RESET}"
     
     # Get the margin from Box class, or use default if not yet calculated
-    daily_margin = getattr(Box, 'daily_table_margin', 8)  # Default margin if not set yet
+    daily_margin = getattr(Box, 'daily_table_margin', 1)  # Default minimal margin
     
     # Create right header with exact same margin as the daily forecast table
-    # This ensures the header is centered with the content below it
+    # This ensures the header is aligned with the content below it
     right_header_text = f"{Colors.BOLD}7-Day Forecast{Colors.RESET}"
     right_header = ' ' * daily_margin + right_header_text
     
@@ -1674,20 +1675,32 @@ def display_wtop(first_run=True):
     # 3.2 Daily forecast section
     daily_data = []
     
-    # Fixed column widths for daily forecast
-    day_width = 6
-    icon_width = 3
-    temp_width = 8
-    cond_width = 10
-    rain_width = 5
+    # Dynamically adjust column widths based on available space
+    # Check how much space we have in the right column
+    available_width = Box.RIGHT_COLUMN_WIDTH
+    
+    # Adaptive column widths for daily forecast
+    if available_width > 40:
+        # Full width display
+        day_width = 6
+        icon_width = 3
+        temp_width = 8
+        cond_width = min(10, available_width - 30)  # Adaptive condition width
+        rain_width = 5
+    else:
+        # Compact display for smaller terminals
+        day_width = 4
+        icon_width = 2
+        temp_width = 7
+        cond_width = min(8, available_width - 25)
+        rain_width = 4
     
     # Calculate total width of the daily forecast table content
     table_content_width = day_width + icon_width + temp_width + cond_width + rain_width + 4  # +4 for the separator characters
     
-    # Center the table in the available space
-    # Center the table in the available space - use the same margin for all rows
-    daily_margin = (Box.RIGHT_COLUMN_WIDTH - table_content_width) // 2
-    daily_margin = max(2, daily_margin)  # Ensure at least 2 spaces of margin
+    # Push the table to the left for better fit on smaller screens
+    # Use minimal margin instead of centering
+    daily_margin = 1  # Minimal left margin instead of centering
     
     # Store this margin as a class attribute so it can be used by the header
     # This is used for the "7-Day Forecast" header centering
@@ -1747,10 +1760,10 @@ def display_wtop(first_run=True):
         
         precip_formatted = f"{precip_color}{forecast['precip']:.1f}{Colors.RESET}" if forecast["precip"] > 0 else "0"
         
-        # Format condition
+        # Format condition - truncate if too long for the column
         condition = forecast["condition"]
-        if len(condition) > cond_width - 2:
-            condition = condition[:cond_width - 2]
+        if len(condition) > cond_width:
+            condition = condition[:cond_width-1]  # Truncate to fit
         
         # Build the row manually with proper spacing
         day_col = day.center(day_width)
@@ -1791,22 +1804,6 @@ def display_wtop(first_run=True):
     # Determine how many content rows we need
     content_rows = max(len(hourly_data), len(daily_data))
     
-    # Pad the shorter columns to match
-    while len(hourly_data) < content_rows:
-        hourly_data.append(" " * Box.LEFT_COLUMN_WIDTH)
-    while len(daily_data) < content_rows:
-        daily_data.append(" " * Box.RIGHT_COLUMN_WIDTH)
-    
-    # Display content rows inside the fixed border
-    # Pre-calculate content row locations
-    content_rows = max(len(hourly_data), len(daily_data), 14)  # Ensure at least 14 content rows for aesthetics
-    
-    # Make sure we have enough data rows
-    while len(hourly_data) < content_rows:
-        hourly_data.append("")
-    while len(daily_data) < content_rows:
-        daily_data.append("")
-    
     # Process and display each content row with fixed borders
     for i in range(content_rows):
         # Get row data from each column
@@ -1820,6 +1817,14 @@ def display_wtop(first_run=True):
     print(Box.FORECAST_BOTTOM)
 
 
+# Global flag for terminal resize
+terminal_resized = False
+
+def handle_resize(signum, frame):
+    """Handle terminal resize signal."""
+    global terminal_resized
+    terminal_resized = True
+
 def main():
     """Main function to run the weather dashboard."""
     if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help", "--check-borders"]:
@@ -1827,8 +1832,7 @@ def main():
         print("Usage: python wtop.py")
         print(f"\nCurrently displaying weather for: {CITY}, {STATE}")
         print(f"Location coordinates: {LATITUDE}, {LONGITUDE}")
-        print("Your location is automatically detected using IP geolocation and saved for future use.")
-        print("Location data is stored in: " + CONFIG_FILE)
+        print("Your location is automatically detected using IP geolocation on each run.")
         print("\nThe dashboard uses the Weather.gov API for real-time weather data.")
         print("No API key is required for US locations.")
         print("\nThe dashboard updates automatically every 5 seconds.")
@@ -1852,35 +1856,48 @@ def main():
         
         sys.exit(0)
     
+    # Set up signal handler for terminal resize (Unix/Linux only)
+    if hasattr(signal, 'SIGWINCH'):
+        signal.signal(signal.SIGWINCH, handle_resize)
+    
     # Run in a continuous loop, updating every 5 seconds
     try:
+        global terminal_resized
         first_run = True
+        last_update = 0
+        
         while True:
-            # Display the dashboard
-            display_wtop(first_run=first_run)
+            current_time = time.time()
             
-            # Create a simple status message
-            exit_msg = "Press Ctrl+C to exit"
-            update_msg = "Updates every 5 seconds"
-            combined_msg = f"{update_msg} | {exit_msg}"
+            # Check if we need to update (every 5 seconds or on resize)
+            if terminal_resized or first_run or (current_time - last_update) >= 5:
+                # Display the dashboard
+                display_wtop(first_run=(first_run or terminal_resized))
+                
+                # Create a simple status message
+                exit_msg = "Press Ctrl+C to exit"
+                update_msg = "Updates every 5 seconds"
+                combined_msg = f"{update_msg} | {exit_msg}"
+                
+                # Calculate exact centering
+                term_width, _ = get_terminal_size()
+                msg_len = len(combined_msg)
+                left_padding = max(0, (min(term_width - 2, 130) - msg_len) // 2)
+                
+                # Print message with proper spacing
+                print()
+                print(' ' * left_padding + combined_msg)
+                
+                # Clear to end of screen to remove any leftover content
+                clear_to_end()
+                
+                # Reset flags
+                first_run = False
+                terminal_resized = False
+                last_update = current_time
             
-            # Calculate exact centering
-            msg_len = len(combined_msg)
-            left_padding = (Box.DEFAULT_WIDTH - msg_len) // 2
-            right_padding = Box.DEFAULT_WIDTH - msg_len - left_padding
-            
-            # Print message with proper spacing
-            print()
-            print(' ' * left_padding + combined_msg + ' ' * right_padding)
-            
-            # Clear to end of screen to remove any leftover content
-            clear_to_end()
-            
-            # After first run, subsequent updates will be smooth
-            first_run = False
-            
-            # Sleep for 5 seconds before refreshing
-            time.sleep(5)
+            # Short sleep to be responsive to resize events
+            time.sleep(0.1)
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
         print("\nExiting WTOP dashboard. Goodbye!")
