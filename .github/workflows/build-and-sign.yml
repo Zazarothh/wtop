@@ -58,6 +58,7 @@ jobs:
     - name: Sign executable with SignPath
       uses: signpath/github-action-submit-signing-request@v0.3
       with:
+        connector-url: https://github.signpath.io
         api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
         organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
         project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
