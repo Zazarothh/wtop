@@ -5,6 +5,7 @@ A beautiful, responsive terminal-based weather dashboard that displays real-time
 ![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Signed](https://img.shields.io/badge/signed-SignPath.io-orange)
 
 ## Features
 
@@ -15,9 +16,9 @@ A beautiful, responsive terminal-based weather dashboard that displays real-time
 - 🎨 **Color-Coded Display**: Temperature-based colors for intuitive reading
 - 🔄 **Smooth Auto-Refresh**: Updates every 5 seconds without screen flicker
 - 📐 **Responsive Design**: Automatically adapts to any terminal size
-- 📍 **Auto-Location**: Detects your location via IP geolocation
-- 💾 **Location Caching**: Saves location for instant subsequent launches
+- 📍 **Auto-Location**: Detects your location via IP geolocation on every run
 - 🚀 **Zero Configuration**: Works out of the box with automatic dependency installation
+- ✅ **Digitally Signed**: Windows executable signed through SignPath.io for security
 
 ## Screenshots
 
@@ -39,7 +40,14 @@ A beautiful, responsive terminal-based weather dashboard that displays real-time
 
 ## Installation
 
-### Quick Start
+### Windows Executable (Recommended)
+
+Download the latest signed executable from the [Releases](https://github.com/Zazarothh/wtop/releases) page:
+- `wtop-v*.exe` - Digitally signed Windows executable
+- No Python installation required
+- No SmartScreen warnings (signed via SignPath.io)
+
+### Quick Start (From Source)
 
 1. Clone the repository:
 ```bash
@@ -217,10 +225,21 @@ python wtop.py --check-borders
 
 MIT License - See LICENSE file for details
 
+## Code Signing
+
+The Windows executable is digitally signed through [SignPath.io](https://signpath.io)'s open source program. This ensures:
+- ✅ No SmartScreen warnings
+- ✅ Verified publisher identity
+- ✅ Tamper protection
+- ✅ Increased user trust
+
+For more information about the signing process, see [SIGNPATH_SETUP.md](SIGNPATH_SETUP.md).
+
 ## Acknowledgments
 
 - Weather data: [Weather.gov](https://www.weather.gov/) (National Weather Service)
 - IP geolocation: [ipinfo.io](https://ipinfo.io/)
+- Code signing: [SignPath.io](https://signpath.io) (Open Source Program)
 - Inspired by terminal tools like htop, bashtop, and wttr.in
 
 ## Author

@@ -1,0 +1,105 @@
+name: Build and Sign Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.2)'
+        required: true
+        default: '1.0.2'
+
+jobs:
+  build-and-sign:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller requests
+    
+    - name: Build executable
+      run: |
+        pyinstaller --onefile --name wtop wtop.py
+    
+    - name: Get version
+      id: get_version
+      run: |
+        if ("${{ github.event_name }}" -eq "push") {
+          $VERSION = "${{ github.ref_name }}".TrimStart("v")
+        } else {
+          $VERSION = "${{ github.event.inputs.version }}"
+        }
+        echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
+        echo "Version: $VERSION"
+    
+    # SignPath signing (only if secrets are configured)
+    - name: Sign executable with SignPath
+      if: env.SIGNPATH_API_TOKEN != ''
+      env:
+        SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      uses: signpath/github-action-submit-signing-request@v0.3
+      with:
+        api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+        organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+        project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+        signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+        artifact-path: dist/wtop.exe
+        wait-for-completion: true
+        output-artifact-path: dist/wtop-signed.exe
+    
+    - name: Rename signed executable
+      if: env.SIGNPATH_API_TOKEN != ''
+      env:
+        SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      run: |
+        if (Test-Path "dist/wtop-signed.exe") {
+          Move-Item -Force "dist/wtop-signed.exe" "dist/wtop.exe"
+        }
+    
+    - name: Create release assets
+      run: |
+        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
+        
+        # Copy and rename executable
+        Copy-Item "dist/wtop.exe" "wtop-v$VERSION-windows-x64.exe"
+        
+        # Create source archive
+        Compress-Archive -Path @('wtop.py', 'requirements.txt', 'README.md', 'LICENSE', 'RELEASE_NOTES.md') -DestinationPath "wtop-v$VERSION-source.zip"
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.event_name == 'push' && github.ref_name || format('v{0}', github.event.inputs.version) }}
+        name: WTOP v${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## WTOP v${{ steps.get_version.outputs.VERSION }}
+          
+          ### Installation
+          Download the appropriate file for your system:
+          - **Windows**: `wtop-v${{ steps.get_version.outputs.VERSION }}-windows-x64.exe` (digitally signed)
+          - **Source Code**: `wtop-v${{ steps.get_version.outputs.VERSION }}-source.zip` (requires Python 3.8+)
+          
+          ### What's New
+          See [RELEASE_NOTES.md](https://github.com/${{ github.repository }}/blob/main/RELEASE_NOTES.md) for details.
+          
+          ### Digital Signature
+          The Windows executable is digitally signed through SignPath.io's open source program.
+        files: |
+          wtop-v${{ steps.get_version.outputs.VERSION }}-windows-x64.exe
+          wtop-v${{ steps.get_version.outputs.VERSION }}-source.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
