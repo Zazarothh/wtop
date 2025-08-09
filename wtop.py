@@ -31,29 +31,15 @@ except ImportError:
 # Weather.gov API doesn't require an API key
 UNITS = "imperial"  # imperial for F, metric for C
 
-# Config file path
-CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".wtop_config.json")
+# Config file path (removed - no longer caching location)
+# CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".wtop_config.json")
 
 # Always use real API data
 MOCK_MODE = False  # This variable is kept for backward compatibility but no longer used
 
-# Load location data from config file or geolocate if not found
+# Load location data - always geolocate on each run
 def load_location():
-    # Check if config file exists
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-                return (
-                    config.get('city', 'San Diego'), 
-                    config.get('state', 'CA'),
-                    config.get('latitude', 32.7153),
-                    config.get('longitude', -117.1573)
-                )
-        except Exception as e:
-            print(f"Error loading config: {e}")
-    
-    # If config doesn't exist or is invalid, geolocate the user
+    # Always geolocate the user on each run (no caching)
     return geolocate_user()
 
 # Geolocate the user based on their IP address
@@ -71,8 +57,7 @@ def geolocate_user():
             latitude = float(coords[0])
             longitude = float(coords[1])
             
-            # Save location to config file
-            save_location(location, state, latitude, longitude)
+            # No longer saving location to config file (removed caching)
             return location, state, latitude, longitude
         else:
             # Fallback to default location if API fails
@@ -81,20 +66,20 @@ def geolocate_user():
         print(f"Error during geolocation: {e}")
         return "San Diego", "CA", 32.7153, -117.1573
 
-# Save location to config file
-def save_location(city, state, latitude, longitude):
-    try:
-        config = {
-            'city': city, 
-            'state': state,
-            'latitude': latitude,
-            'longitude': longitude
-        }
-        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f)
-    except Exception as e:
-        print(f"Error saving location: {e}")
+# Save location to config file (removed - no longer caching location)
+# def save_location(city, state, latitude, longitude):
+#     try:
+#         config = {
+#             'city': city, 
+#             'state': state,
+#             'latitude': latitude,
+#             'longitude': longitude
+#         }
+#         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+#         with open(CONFIG_FILE, 'w') as f:
+#             json.dump(config, f)
+#     except Exception as e:
+#         print(f"Error saving location: {e}")
 
 # Get user location (city, state, and coordinates)
 CITY, STATE, LATITUDE, LONGITUDE = load_location()
